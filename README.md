@@ -1,3 +1,10 @@
+```
+▐██ ▐██ ▐█████▄      ▐██████ ▐██████ ▐██████ ▐██████ ▐██████ ▐██████ ▐██████ ▐██████
+▐██ ▐██ ▐██  ▐█      ▐██ ▐██ ▐██ ▐██ ▐██     ▐██ ▐██ ▐██ ▐██   ▐██   ▐██ ▐██ ▐██ ▐██
+▐██████ ▐██████      ▐██ ▐██ ▐██████ ▐████   ▐██████ ▐██████   ▐██   ▐██ ▐██ ▐██████
+▐██ ▐██ ▐██  ▐█      ▐██ ▐██ ▐██     ▐██     ▐██▐██  ▐██ ▐██   ▐██   ▐██ ▐██ ▐██▐██ 
+▐██ ▐██ ▐█████▀      ▐██████ ▐██     ▐██████ ▐██ ▐██ ▐██ ▐██   ▐██   ▐██████ ▐██ ▐██
+```
 # hyperbolic-operator
 
 Rent [Hyperbolic](https://hyperbolic.ai) on-demand GPUs from your own Kubernetes cluster, declaratively.
@@ -44,8 +51,8 @@ The operator runs a controller in your cluster that consumes the Hyperbolic publ
 
 ```
    Your Kubernetes cluster
-   ┌───────────────────────────────────────────────┐
-   │  Secret(api-key)   ProviderConfig   GPURental  │
+   ┌─────────────────────────────────────────────────┐
+   │  Secret(api-key)   ProviderConfig   GPURental   │
    │        │                │              │        │
    │        └──────┬─────────┘              │        │
    │               ▼                        ▼        │
