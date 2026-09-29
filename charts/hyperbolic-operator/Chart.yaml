@@ -1,0 +1,15 @@
+apiVersion: v2
+name: hyperbolic-operator
+description: Kubernetes operator to rent Hyperbolic on-demand GPUs declaratively via CRDs.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/HyperbolicLabs/hyperbolic-operator
+sources:
+  - https://github.com/HyperbolicLabs/hyperbolic-operator
+keywords:
+  - hyperbolic
+  - gpu
+  - operator
+maintainers:
+  - name: Hyperbolic

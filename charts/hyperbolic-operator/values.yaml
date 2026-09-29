@@ -1,0 +1,54 @@
+# Default values for hyperbolic-operator.
+
+image:
+  repository: ghcr.io/hyperboliclabs/hyperbolic-operator
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+replicaCount: 1
+
+# Leader election lets you run more than one replica safely.
+leaderElection:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: ""           # defaults to the fullname
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# Probe port (matches the manager's --health-probe-bind-address).
+healthProbePort: 8081
+
+# Metrics are disabled by default (manager --metrics-bind-address=0). Set an
+# address like ":8080" to enable an HTTP metrics endpoint (insecure).
+metrics:
+  bindAddress: "0"
+
+podAnnotations: {}
+podLabels: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+securityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL

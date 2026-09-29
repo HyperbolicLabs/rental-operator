@@ -1,0 +1,34 @@
+apiVersion: hyperbolic.ai/v1alpha1
+kind: GPURental
+metadata:
+  name: train-run-42
+  namespace: default
+spec:
+  # Credential: the ProviderConfig in this namespace (holds the API key + endpoint).
+  providerConfigRef:
+    name: default
+
+  gpuType: h100          # h100 | h200 | b200 | rtx-6000-pro
+  gpuCount: 8            # >8 yields a multi-node rental
+
+  # Optional. Omit to let the operator auto-pick the cheapest available region.
+  # region: us-central-1
+
+  # Optional interconnect fabric (ethernet | infiniband). Omit to let the
+  # operator pick an available fabric; set to pin one (matters for multi-node).
+  # networkType: infiniband
+
+  # Optional display name shown in the Hyperbolic dashboard (the rental label).
+  # displayName: team-a-sweep-42
+
+  # Optional custom ports to open on the instance IP (forge regions only, <=20).
+  # ports: [8080, 8443, 6006]
+
+  # Optional guardrail: refuse to create above this hourly price (cents).
+  # maxPriceCentsPerHour: 3000
+
+  # Permanently terminate but keep this object as a read-only record (one-way).
+  # terminated: false
+  #
+  # Deleting this object also terminates the rental (via the finalizer) and then
+  # removes it: kubectl delete gpurental train-run-42

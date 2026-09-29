@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- v1alpha1_gpurental.yaml
+- v1alpha1_providerconfig.yaml
+- v1alpha1_gpuavailability.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

@@ -1,0 +1,45 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - hyperbolic.ai
+  resources:
+  - gpuavailabilities
+  - gpurentals
+  - providerconfigs
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - hyperbolic.ai
+  resources:
+  - gpuavailabilities/status
+  - gpurentals/status
+  - providerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - hyperbolic.ai
+  resources:
+  - gpurentals/finalizers
+  - providerconfigs/finalizers
+  verbs:
+  - update

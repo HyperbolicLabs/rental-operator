@@ -1,0 +1,18 @@
+apiVersion: hyperbolic.ai/v1alpha1
+kind: GPUAvailability
+metadata:
+  name: h100-us-central
+  namespace: default
+spec:
+  # Which account's catalogue to show (the catalogue is per-account).
+  providerConfigRef:
+    name: default
+  # Filters below are all optional; with none set it lists every VM offering.
+  gpuType: h100
+  # gpuCount: 8
+  region: us-central-1
+  # networkType: infiniband
+  # maxPriceCentsPerHour: 3000
+  onlyAvailable: true    # only enabled offerings with known in-stock > 0
+# status.offerings[] is populated by the operator from the shared catalogue cache:
+#   kubectl get gpuavailability h100-us-central -o yaml

@@ -1,0 +1,15 @@
+apiVersion: hyperbolic.ai/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: default
+  namespace: default
+spec:
+  # References a Secret in this namespace holding your Hyperbolic API key.
+  # Create it with:
+  #   kubectl create secret generic hyperbolic-key \
+  #     --from-literal=api-key=sk_live_xxxxxxxxxxxxxxxxxxxx
+  apiKeySecretRef:
+    name: hyperbolic-key
+    key: api-key
+  # endpoint defaults to https://api.hyperbolic.ai
+  # endpoint: https://api.hyperbolic.ai
