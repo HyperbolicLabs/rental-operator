@@ -74,7 +74,7 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	bal, err := creds.newClient().GetBalance(ctx)
 	if err != nil {
-		reason := "APIError"
+		reason := reasonAPIError
 		if code := hyperbolic.StatusCodeOf(err); code == 401 || code == 403 {
 			reason = "Unauthenticated"
 		}

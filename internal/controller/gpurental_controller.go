@@ -46,6 +46,9 @@ const (
 	runningPoll  = 60 * time.Second
 	blockedRetry = 3 * time.Minute
 	apiRetry     = 30 * time.Second
+
+	// reasonAPIError is the condition reason for a transient API failure.
+	reasonAPIError = "APIError"
 )
 
 // Known API error codes we translate into conditions.
@@ -157,7 +160,7 @@ func (r *GPURentalReconciler) reconcileStop(ctx context.Context, gr *hypv1alpha1
 	numericID := r.numericID(gr)
 	if numericID != 0 {
 		if err := hc.TerminateVMRental(ctx, numericID, "spec.terminated=true"); err != nil && !isGoneError(err) {
-			r.setReady(gr, metav1.ConditionFalse, "APIError", err.Error())
+			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 	}
@@ -180,7 +183,7 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 			vm, err := r.findByNumericID(ctx, hc, id)
 			if err != nil {
-				r.setReady(gr, metav1.ConditionUnknown, "APIError", "list rentals: "+err.Error())
+				r.setReady(gr, metav1.ConditionUnknown, reasonAPIError, "list rentals: "+err.Error())
 				return r.finish(ctx, gr, apiRetry)
 			}
 			if vm != nil {
@@ -197,7 +200,7 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 	if gr.Spec.DisplayName != "" {
 		vm, err := r.adoptByLabel(ctx, hc, gr)
 		if err != nil {
-			r.setReady(gr, metav1.ConditionUnknown, "APIError", "list rentals: "+err.Error())
+			r.setReady(gr, metav1.ConditionUnknown, reasonAPIError, "list rentals: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 		if vm != nil {
@@ -222,7 +225,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if r.Catalog != nil {
 		opts, _, err := r.Catalog.Get(ctx, hc, creds.key())
 		if err != nil && len(opts) == 0 {
-			r.setReady(gr, metav1.ConditionFalse, "APIError", "rental-options: "+err.Error())
+			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 		options = opts
@@ -230,7 +233,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		var err error
 		options, err = hc.GetRentalOptions(ctx)
 		if err != nil {
-			r.setReady(gr, metav1.ConditionFalse, "APIError", "rental-options: "+err.Error())
+			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 	}
@@ -412,7 +415,7 @@ func (r *GPURentalReconciler) adoptByLabel(ctx context.Context, hc *hyperbolic.C
 	if err != nil {
 		return nil, err
 	}
-	var matches []*hyperbolic.VMRental
+	matches := make([]*hyperbolic.VMRental, 0, len(rentals))
 	for i := range rentals {
 		vm := &rentals[i]
 		if vm.Label == nil || *vm.Label != gr.Spec.DisplayName {
@@ -515,7 +518,7 @@ func (r *GPURentalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // selectOption picks the cheapest enabled, available VM option matching the spec.
 func selectOption(options []hyperbolic.RentalOption, spec hypv1alpha1.GPURentalSpec) (chosen *hyperbolic.RentalOption, reason, msg string) {
-	var candidates []hyperbolic.RentalOption
+	candidates := make([]hyperbolic.RentalOption, 0, len(options))
 	for _, o := range options {
 		if o.MachineType != machineTypeVM {
 			continue
@@ -564,7 +567,7 @@ func classifyCreateError(err error) (reason, msg string) {
 	case hyperbolic.HasCode(err, codeCostCalcFailed):
 		return "AvailabilityUnavailable", "no matching offering (cost calculation failed) for the requested config/fabric/region"
 	default:
-		return "APIError", err.Error()
+		return reasonAPIError, err.Error()
 	}
 }
 
@@ -572,7 +575,7 @@ func classifyCreateError(err error) (reason, msg string) {
 // terminal-until-spec-change (slow) or transient (faster).
 func createErrorRetry(reason string) time.Duration {
 	switch reason {
-	case "APIError":
+	case reasonAPIError:
 		return apiRetry
 	default:
 		return blockedRetry

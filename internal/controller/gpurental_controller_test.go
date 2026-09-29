@@ -22,12 +22,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	hyperbolicaiv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
+	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
 )
 
 var _ = Describe("GPURental Controller", func() {
@@ -35,50 +35,57 @@ var _ = Describe("GPURental Controller", func() {
 		const resourceName = "test-resource"
 
 		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
-		}
-		gpurental := &hyperbolicaiv1alpha1.GPURental{}
+		typeNamespacedName := types.NamespacedName{Name: resourceName, Namespace: "default"}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind GPURental")
-			err := k8sClient.Get(ctx, typeNamespacedName, gpurental)
+			By("creating a valid GPURental")
+			err := k8sClient.Get(ctx, typeNamespacedName, &hypv1alpha1.GPURental{})
 			if err != nil && errors.IsNotFound(err) {
-				resource := &hyperbolicaiv1alpha1.GPURental{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+				resource := &hypv1alpha1.GPURental{
+					ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"},
+					Spec: hypv1alpha1.GPURentalSpec{
+						// References a ProviderConfig that doesn't exist, so the
+						// controller resolves credentials, fails gracefully, and
+						// records a condition without calling the real API.
+						ProviderConfigRef: hypv1alpha1.LocalRef{Name: "missing"},
+						GPUType:           "h100",
+						GPUCount:          1,
 					},
-					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &hyperbolicaiv1alpha1.GPURental{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance GPURental")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &GPURentalReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+			resource := &hypv1alpha1.GPURental{}
+			if err := k8sClient.Get(ctx, typeNamespacedName, resource); err == nil {
+				// Drop the finalizer the controller added so the object can be removed.
+				if len(resource.Finalizers) > 0 {
+					resource.Finalizers = nil
+					Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+				}
+				By("cleaning up the GPURental")
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			}
+		})
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
+		It("adds the finalizer and records a credential-error condition", func() {
+			r := &GPURentalReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), Catalog: NewCatalogCache(0)}
+
+			// First pass installs the finalizer.
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			// Second pass resolves creds (ProviderConfig missing) and sets a condition.
+			_, err = r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
+			Expect(err).NotTo(HaveOccurred())
+
+			got := &hypv1alpha1.GPURental{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
+			Expect(got.Finalizers).To(ContainElement(rentalFinalizer))
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, hypv1alpha1.ConditionReady)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Reason).To(Equal("CredentialError"))
 		})
 	})
 })

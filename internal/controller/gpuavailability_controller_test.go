@@ -22,12 +22,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	hyperbolicaiv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
+	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
 )
 
 var _ = Describe("GPUAvailability Controller", func() {
@@ -35,50 +35,43 @@ var _ = Describe("GPUAvailability Controller", func() {
 		const resourceName = "test-resource"
 
 		ctx := context.Background()
-
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
-		}
-		gpuavailability := &hyperbolicaiv1alpha1.GPUAvailability{}
+		typeNamespacedName := types.NamespacedName{Name: resourceName, Namespace: "default"}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind GPUAvailability")
-			err := k8sClient.Get(ctx, typeNamespacedName, gpuavailability)
+			By("creating a valid GPUAvailability")
+			err := k8sClient.Get(ctx, typeNamespacedName, &hypv1alpha1.GPUAvailability{})
 			if err != nil && errors.IsNotFound(err) {
-				resource := &hyperbolicaiv1alpha1.GPUAvailability{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
+				resource := &hypv1alpha1.GPUAvailability{
+					ObjectMeta: metav1.ObjectMeta{Name: resourceName, Namespace: "default"},
+					Spec: hypv1alpha1.GPUAvailabilitySpec{
+						// Missing ProviderConfig, so cred resolution fails before any
+						// catalogue call and a CredentialError condition is recorded.
+						ProviderConfigRef: hypv1alpha1.LocalRef{Name: "missing"},
 					},
-					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &hyperbolicaiv1alpha1.GPUAvailability{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
-			Expect(err).NotTo(HaveOccurred())
-
-			By("Cleanup the specific resource instance GPUAvailability")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		It("should successfully reconcile the resource", func() {
-			By("Reconciling the created resource")
-			controllerReconciler := &GPUAvailabilityReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+			resource := &hypv1alpha1.GPUAvailability{}
+			if err := k8sClient.Get(ctx, typeNamespacedName, resource); err == nil {
+				By("cleaning up the GPUAvailability")
+				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			}
+		})
 
-			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: typeNamespacedName,
-			})
+		It("records a credential-error condition when the ProviderConfig is missing", func() {
+			r := &GPUAvailabilityReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), Catalog: NewCatalogCache(0)}
+
+			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			got := &hypv1alpha1.GPUAvailability{}
+			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
+			cond := apimeta.FindStatusCondition(got.Status.Conditions, hypv1alpha1.ConditionReady)
+			Expect(cond).NotTo(BeNil())
+			Expect(cond.Reason).To(Equal("CredentialError"))
 		})
 	})
 })

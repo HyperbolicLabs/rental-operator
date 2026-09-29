@@ -118,7 +118,7 @@ func (r *GPUAvailabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // filterOfferings applies a GPUAvailability spec filter to the catalogue and
 // returns matching VM offerings, cheapest first. Pure and unit-testable.
 func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvailabilitySpec) []hypv1alpha1.Offering {
-	var out []hypv1alpha1.Offering
+	out := make([]hypv1alpha1.Offering, 0, len(options))
 	for _, o := range options {
 		if o.MachineType != machineTypeVM {
 			continue
