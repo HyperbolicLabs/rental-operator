@@ -49,7 +49,26 @@ const (
 
 	// reasonAPIError is the condition reason for a transient API failure.
 	reasonAPIError = "APIError"
+
+	// phaseProvisioning is the CR phase shown while the API status is Pending
+	// (clearer than surfacing the raw "Pending").
+	phaseProvisioning = "Provisioning"
+
+	// phaseBlocked is the CR phase when the rental can't be created yet — no
+	// availability, insufficient balance, disabled region, unsupported ports,
+	// missing SSH key, or a bad credential. The specific reason is on the
+	// Ready condition, and the operator retries without hot-looping.
+	phaseBlocked = "Blocked"
 )
+
+// rentalPhase maps the raw API status to the CR's phase, renaming the API's
+// pre-Running "Pending" to "Provisioning".
+func rentalPhase(apiStatus string) string {
+	if apiStatus == hyperbolic.StatusPending {
+		return phaseProvisioning
+	}
+	return apiStatus
+}
 
 // Known API error codes we translate into conditions.
 const (
@@ -108,7 +127,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if credErr != nil {
 		log.Info("credentials not resolvable", "error", credErr.Error())
-		r.setReady(&gr, metav1.ConditionFalse, "CredentialError", credErr.Error())
+		r.setBlocked(&gr, "CredentialError", credErr.Error())
 		return r.finish(ctx, &gr, apiRetry)
 	}
 	hc := creds.newClient()
@@ -225,7 +244,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if r.Catalog != nil {
 		opts, _, err := r.Catalog.Get(ctx, hc, creds.key())
 		if err != nil && len(opts) == 0 {
-			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, "rental-options: "+err.Error())
+			r.setBlocked(gr, reasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 		options = opts
@@ -233,21 +252,21 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		var err error
 		options, err = hc.GetRentalOptions(ctx)
 		if err != nil {
-			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, "rental-options: "+err.Error())
+			r.setBlocked(gr, reasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 	}
 
 	chosen, reason, msg := selectOption(options, gr.Spec)
 	if chosen == nil {
-		r.setReady(gr, metav1.ConditionFalse, reason, msg)
+		r.setBlocked(gr, reason, msg)
 		return r.finish(ctx, gr, blockedRetry)
 	}
 
 	// Balance preflight (~1h of runway including overdraft).
 	if bal, err := hc.GetBalance(ctx); err == nil {
 		if float64(bal.BalanceCents+bal.MaxOverdraftCents) < chosen.CostPerHourCents {
-			r.setReady(gr, metav1.ConditionFalse, "InsufficientBalance",
+			r.setBlocked(gr, "InsufficientBalance",
 				fmt.Sprintf("balance %d + overdraft %d cents < ~1h cost %.0f cents",
 					bal.BalanceCents, bal.MaxOverdraftCents, chosen.CostPerHourCents))
 			return r.finish(ctx, gr, blockedRetry)
@@ -277,7 +296,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if err != nil {
 		reason, msg := classifyCreateError(err)
 		log.Info("create failed", "reason", reason, "error", err.Error())
-		r.setReady(gr, metav1.ConditionFalse, reason, msg)
+		r.setBlocked(gr, reason, msg)
 		return r.finish(ctx, gr, createErrorRetry(reason))
 	}
 
@@ -292,7 +311,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if row.Region != nil {
 		gr.Status.Region = *row.Region
 	}
-	gr.Status.Phase = hyperbolic.StatusPending
+	gr.Status.Phase = phaseProvisioning
 	if len(gr.Spec.Ports) > 0 {
 		gr.Status.OpenPorts = gr.Spec.Ports
 	}
@@ -357,7 +376,7 @@ func (r *GPURentalReconciler) rebootInstances(ctx context.Context, hc *hyperboli
 
 // applyRentalToStatus maps a live rental onto CR status + conditions.
 func (r *GPURentalReconciler) applyRentalToStatus(gr *hypv1alpha1.GPURental, vm *hyperbolic.VMRental) {
-	gr.Status.Phase = vm.Status
+	gr.Status.Phase = rentalPhase(vm.Status)
 	gr.Status.NumericID = ptr(vm.ID)
 	gr.Status.RentalID = vm.RentalID
 	if vm.Name != nil {
@@ -473,6 +492,13 @@ func (r *GPURentalReconciler) setReady(gr *hypv1alpha1.GPURental, status metav1.
 		ObservedGeneration: gr.Generation,
 	})
 	gr.Status.ObservedGeneration = gr.Generation
+}
+
+// setBlocked marks the rental as unable to be created yet (phase Blocked) with
+// the specific reason on the Ready condition.
+func (r *GPURentalReconciler) setBlocked(gr *hypv1alpha1.GPURental, reason, msg string) {
+	gr.Status.Phase = phaseBlocked
+	r.setReady(gr, metav1.ConditionFalse, reason, msg)
 }
 
 // finish writes status and returns a requeue result.

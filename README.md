@@ -177,7 +177,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 
 | Status field | Description |
 |---|---|
-| `phase` | `Pending` / `Running` / `Rebooting` / `Terminating` / `Terminated` / `Failed` / `Unknown`. |
+| `phase` | `Provisioning` (created, coming up) / `Running` / `Rebooting` / `Terminating` / `Terminated` / `Failed` / `Blocked` (can't be created yet — see the reason on `Ready`) / `Unknown`. |
 | `rentalId` | The server's string rental id. |
 | `name` | The server's 3-word rental name (shown in the dashboard). |
 | `region` | Resolved region. |
