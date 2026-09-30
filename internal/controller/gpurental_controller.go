@@ -42,9 +42,13 @@ const (
 	annoRebootedGen = "hyperbolic.ai/rebooted-generation"
 	machineTypeVM   = "virtual-machine"
 
-	pendingPoll  = 10 * time.Second
-	runningPoll  = 60 * time.Second
-	blockedRetry = 3 * time.Minute
+	pendingPoll = 10 * time.Second
+	runningPoll = 60 * time.Second
+	// blockedRetry is how often a Blocked rental (no availability, insufficient
+	// balance, disabled region, unsupported ports, missing key) is retried.
+	// These states clear on their own (stock returns, balance tops up) or on a
+	// spec change, so a gentle 5-minute cadence avoids hammering the API.
+	blockedRetry = 5 * time.Minute
 	apiRetry     = 30 * time.Second
 
 	// reasonAPIError is the condition reason for a transient API failure.
