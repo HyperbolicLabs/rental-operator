@@ -79,6 +79,16 @@ Three custom resources:
 
 ## Install
 
+From a published release (recommended — chart + image are pulled from GHCR):
+
+```console
+helm install rental-operator \
+  oci://ghcr.io/hyperboliclabs/charts/rental-operator --version X.Y.Z \
+  --namespace rental-operator-system --create-namespace
+```
+
+Or from a checkout of this repo:
+
 ```console
 helm install rental-operator ./charts/rental-operator \
   --namespace rental-operator-system --create-namespace
@@ -304,6 +314,18 @@ Run the unit tests:
 ```console
 go test ./internal/...
 ```
+
+## Releasing
+
+Releases are cut by publishing a **GitHub Release** with a semver tag (`vX.Y.Z`). Merges to `main` only run lint/tests — they never publish. Publishing a Release triggers `.github/workflows/release.yml`, which:
+
+1. builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to `ghcr.io/hyperboliclabs/rental-operator:X.Y.Z` (and `:latest`);
+2. packages the Helm chart with `version`/`appVersion` set to the tag (so the chart pulls the matching image) and pushes it to `oci://ghcr.io/hyperboliclabs/charts/rental-operator`;
+3. attaches the packaged `.tgz` to the Release.
+
+The tag is the single source of truth for the version — the committed `Chart.yaml` version is only a placeholder and is overridden at package time. To release: cut the tag/Release; no manual version bump or image build is needed.
+
+> One-time setup: the GHCR packages (image + chart) must be made public (or consumers configured with a pull secret), and the repository's Actions need `packages: write` (already declared in the workflow).
 
 ## Security
 
