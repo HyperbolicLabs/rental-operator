@@ -31,8 +31,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/hyperbolic"
+	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 const (

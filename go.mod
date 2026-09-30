@@ -1,4 +1,4 @@
-module github.com/HyperbolicLabs/hyperbolic-operator
+module github.com/HyperbolicLabs/rental-operator
 
 go 1.24.5
 

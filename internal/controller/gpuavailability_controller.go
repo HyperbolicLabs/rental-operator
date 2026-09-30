@@ -29,8 +29,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/hyperbolic"
+	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 // catalogRetry is the requeue delay while the catalogue can't be fetched.

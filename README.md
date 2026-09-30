@@ -5,7 +5,7 @@
 ▐██ ▐██ ▐██  ▐█      ▐██ ▐██ ▐██     ▐██     ▐██▐██  ▐██ ▐██   ▐██   ▐██ ▐██ ▐██▐██ 
 ▐██ ▐██ ▐█████▀      ▐██████ ▐██     ▐██████ ▐██ ▐██ ▐██ ▐██   ▐██   ▐██████ ▐██ ▐██
 ```
-# hyperbolic-operator
+# rental-operator
 
 Rent [Hyperbolic](https://hyperbolic.ai) on-demand GPUs from your own Kubernetes cluster, declaratively.
 
@@ -56,7 +56,7 @@ The operator runs a controller in your cluster that consumes the Hyperbolic publ
    │        │                │              │        │
    │        └──────┬─────────┘              │        │
    │               ▼                        ▼        │
-   │          hyperbolic-operator (controller)       │
+   │          rental-operator (controller)       │
    │               │  reconcile: create/poll/term    │
    └───────────────┼─────────────────────────────────┘
                    │  HTTPS + Bearer <api-key>
@@ -80,13 +80,13 @@ Three custom resources:
 ## Install
 
 ```console
-helm install hyperbolic-operator ./charts/hyperbolic-operator \
-  --namespace hyperbolic-operator-system --create-namespace
+helm install rental-operator ./charts/rental-operator \
+  --namespace rental-operator-system --create-namespace
 ```
 
 This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By default the operator watches all namespaces.
 
-> The chart ships the CRDs under `charts/hyperbolic-operator/crds/`. Helm installs CRDs on first install but does **not** upgrade them; on a chart upgrade that changes the CRDs, re-apply them with `kubectl apply -f charts/hyperbolic-operator/crds/`.
+> The chart ships the CRDs under `charts/rental-operator/crds/`. Helm installs CRDs on first install but does **not** upgrade them; on a chart upgrade that changes the CRDs, re-apply them with `kubectl apply -f charts/rental-operator/crds/`.
 
 ## Quickstart
 
@@ -280,13 +280,13 @@ Preflight failures never create a rental (no charge), and the operator backs off
 kind create cluster
 
 # 2. Build the image and load it into kind
-make docker-build IMG=hyperbolic-operator:dev
-kind load docker-image hyperbolic-operator:dev
+make docker-build IMG=rental-operator:dev
+kind load docker-image rental-operator:dev
 
 # 3. Install the chart pointing at the loaded image
-helm install hyperbolic-operator ./charts/hyperbolic-operator \
-  --namespace hyperbolic-operator-system --create-namespace \
-  --set image.repository=hyperbolic-operator --set image.tag=dev \
+helm install rental-operator ./charts/rental-operator \
+  --namespace rental-operator-system --create-namespace \
+  --set image.repository=rental-operator --set image.tag=dev \
   --set image.pullPolicy=IfNotPresent
 
 # 4. Add your key + a ProviderConfig + a GPURental (see Quickstart)

@@ -1,37 +1,37 @@
-{{- define "hyperbolic-operator.name" -}}
+{{- define "rental-operator.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 
-{{- define "hyperbolic-operator.fullname" -}}
+{{- define "rental-operator.fullname" -}}
 {{- if .Values.fullnameOverride -}}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
 {{- else -}}
-{{- printf "%s" (include "hyperbolic-operator.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- printf "%s" (include "rental-operator.name" .) | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "hyperbolic-operator.labels" -}}
-app.kubernetes.io/name: {{ include "hyperbolic-operator.name" . }}
+{{- define "rental-operator.labels" -}}
+app.kubernetes.io/name: {{ include "rental-operator.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- end -}}
 
-{{- define "hyperbolic-operator.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "hyperbolic-operator.name" . }}
+{{- define "rental-operator.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "rental-operator.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
-{{- define "hyperbolic-operator.serviceAccountName" -}}
+{{- define "rental-operator.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
-{{- default (include "hyperbolic-operator.fullname" .) .Values.serviceAccount.name -}}
+{{- default (include "rental-operator.fullname" .) .Values.serviceAccount.name -}}
 {{- else -}}
 {{- default "default" .Values.serviceAccount.name -}}
 {{- end -}}
 {{- end -}}
 
-{{- define "hyperbolic-operator.image" -}}
+{{- define "rental-operator.image" -}}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
 {{- end -}}

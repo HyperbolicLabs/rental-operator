@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/hyperbolic"
+	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 // CatalogCache memoizes rental-options results per credential, so the operator

@@ -1,5 +1,5 @@
-{{- $name := include "hyperbolic-operator.fullname" . -}}
-{{- $sa := include "hyperbolic-operator.serviceAccountName" . -}}
+{{- $name := include "rental-operator.fullname" . -}}
+{{- $sa := include "rental-operator.serviceAccountName" . -}}
 ---
 # Core permissions: the CRDs + the Secrets holding API keys. The operator
 # watches all namespaces, so these are cluster-wide.
@@ -8,7 +8,7 @@ kind: ClusterRole
 metadata:
   name: {{ $name }}
   labels:
-    {{- include "hyperbolic-operator.labels" . | nindent 4 }}
+    {{- include "rental-operator.labels" . | nindent 4 }}
 rules:
   - apiGroups: [""]
     resources: [secrets]
@@ -28,7 +28,7 @@ kind: ClusterRoleBinding
 metadata:
   name: {{ $name }}
   labels:
-    {{- include "hyperbolic-operator.labels" . | nindent 4 }}
+    {{- include "rental-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -45,7 +45,7 @@ metadata:
   name: {{ $name }}-leader-election
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "hyperbolic-operator.labels" . | nindent 4 }}
+    {{- include "rental-operator.labels" . | nindent 4 }}
 rules:
   - apiGroups: [coordination.k8s.io]
     resources: [leases]
@@ -60,7 +60,7 @@ metadata:
   name: {{ $name }}-leader-election
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "hyperbolic-operator.labels" . | nindent 4 }}
+    {{- include "rental-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

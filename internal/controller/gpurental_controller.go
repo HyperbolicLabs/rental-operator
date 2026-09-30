@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/hyperbolic"
+	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 const (

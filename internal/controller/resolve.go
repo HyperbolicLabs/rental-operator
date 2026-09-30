@@ -25,8 +25,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/hyperbolic"
+	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 // resolvedCreds is an endpoint + API key pair resolved from a ProviderConfig or

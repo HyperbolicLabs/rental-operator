@@ -1,4 +1,4 @@
-hyperbolic-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
+rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
 
 1. Create a Secret with your Hyperbolic API key (in the namespace where your
    GPURentals will live):

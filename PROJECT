@@ -6,8 +6,8 @@ cliVersion: 4.9.0
 domain: hyperbolic.ai
 layout:
 - go.kubebuilder.io/v4
-projectName: hyperbolic-operator
-repo: github.com/HyperbolicLabs/hyperbolic-operator
+projectName: rental-operator
+repo: github.com/HyperbolicLabs/rental-operator
 resources:
 - api:
     crdVersion: v1
@@ -15,7 +15,7 @@ resources:
   controller: true
   domain: hyperbolic.ai
   kind: GPURental
-  path: github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1
+  path: github.com/HyperbolicLabs/rental-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -23,7 +23,7 @@ resources:
   controller: true
   domain: hyperbolic.ai
   kind: ProviderConfig
-  path: github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1
+  path: github.com/HyperbolicLabs/rental-operator/api/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -31,6 +31,6 @@ resources:
   controller: true
   domain: hyperbolic.ai
   kind: GPUAvailability
-  path: github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1
+  path: github.com/HyperbolicLabs/rental-operator/api/v1alpha1
   version: v1alpha1
 version: "3"

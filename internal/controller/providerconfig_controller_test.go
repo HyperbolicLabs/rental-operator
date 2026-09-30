@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
+	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
 )
 
 var _ = Describe("ProviderConfig Controller", func() {

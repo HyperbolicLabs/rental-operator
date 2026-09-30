@@ -36,8 +36,8 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	hyperbolicaiv1alpha1 "github.com/HyperbolicLabs/hyperbolic-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/hyperbolic-operator/internal/controller"
+	hyperbolicaiv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/controller"
 	// +kubebuilder:scaffold:imports
 )
 

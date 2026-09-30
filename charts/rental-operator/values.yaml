@@ -1,7 +1,7 @@
-# Default values for hyperbolic-operator.
+# Default values for rental-operator.
 
 image:
-  repository: ghcr.io/hyperboliclabs/hyperbolic-operator
+  repository: ghcr.io/hyperboliclabs/rental-operator
   tag: ""            # defaults to .Chart.AppVersion
   pullPolicy: IfNotPresent
 
