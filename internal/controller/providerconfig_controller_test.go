@@ -58,6 +58,11 @@ var _ = Describe("ProviderConfig Controller", func() {
 		AfterEach(func() {
 			resource := &hypv1alpha1.ProviderConfig{}
 			if err := k8sClient.Get(ctx, typeNamespacedName, resource); err == nil {
+				// Drop the in-use finalizer the controller added so the object can be removed.
+				if len(resource.Finalizers) > 0 {
+					resource.Finalizers = nil
+					Expect(k8sClient.Update(ctx, resource)).To(Succeed())
+				}
 				By("cleaning up the ProviderConfig")
 				Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 			}

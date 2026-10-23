@@ -101,6 +101,11 @@ const (
 	// FinalizerTerminate holds a GPURental until its rental is terminated.
 	FinalizerTerminate = "compute.hyperbolic.ai/terminate"
 
+	// FinalizerInUse holds a ProviderConfig while GPURentals that may still
+	// be billing use it, so credentials cannot disappear before the rentals
+	// they pay for.
+	FinalizerInUse = "compute.hyperbolic.ai/in-use"
+
 	// AnnotationRentalID records the rental's id as soon as a create
 	// succeeds, before status is written, so the id survives a failed status
 	// update.

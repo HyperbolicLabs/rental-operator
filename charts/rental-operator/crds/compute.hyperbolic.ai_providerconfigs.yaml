@@ -26,6 +26,9 @@ spec:
       jsonPath: .status.balanceCents
       name: Balance
       type: integer
+    - jsonPath: .status.managedRentals
+      name: Rentals
+      type: integer
     - jsonPath: .status.conditions[?(@.type=="Ready")].status
       name: Ready
       type: string
@@ -180,6 +183,13 @@ spec:
                   against the API.
                 format: date-time
                 type: string
+              managedRentals:
+                description: |-
+                  ManagedRentals is how many GPURentals use this config and have not
+                  finished (their rental is not known to be terminated). While it is above
+                  zero, deleting the config waits.
+                format: int32
+                type: integer
               maxOverdraftCents:
                 description: MaxOverdraftCents is the account's overdraft allowance
                   in cents.

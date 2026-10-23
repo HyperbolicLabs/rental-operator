@@ -175,6 +175,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | `spec.credentials.secretRef.key` | string | Key within the Secret. Default `api-key`. |
 | `spec.endpoint` | string | API base URL. Default `https://api.hyperbolic.ai`. Must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1` or `::1` test servers. |
 | `status.balanceCents` | int | Account balance (cents) at last check. |
+| `status.managedRentals` | int | GPURentals using this config that have not finished. While above zero, deleting the config waits (finalizer `compute.hyperbolic.ai/in-use`), so its credentials outlive the rentals they pay for. |
 | `status.conditions[]` | condition | `Ready`, `Authenticated`. |
 
 ### GPURental
