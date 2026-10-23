@@ -54,12 +54,31 @@ type Credentials struct {
 	SecretRef SecretKeySelector `json:"secretRef"`
 }
 
-// Condition type strings used across the operator's CRDs.
+// Condition types. Conditions are the contract for automation. Phase fields
+// are for display. Every kind reports Ready and Synced.
 const (
-	// ConditionReady is the top-level readiness condition.
+	// ConditionReady says whether the resource is usable: a rental is
+	// running, a config's credentials work, a catalog view is populated. Its
+	// reason says why not.
 	ConditionReady = "Ready"
+	// ConditionSynced says whether the last reconcile could read its
+	// credentials and reach the Hyperbolic API. False means a transient or
+	// configuration problem, not a statement about the rental itself.
+	ConditionSynced = "Synced"
 	// ConditionAuthenticated indicates the API key authenticated successfully.
 	ConditionAuthenticated = "Authenticated"
+)
+
+// Reasons shared by every kind.
+const (
+	// ReasonReconcileSuccess is Synced=True: the last reconcile reached the API.
+	ReasonReconcileSuccess = "ReconcileSuccess"
+	// ReasonAPIError is a failed call to the Hyperbolic API (a 5xx, a timeout,
+	// rate limiting). The operator retries.
+	ReasonAPIError = "APIError"
+	// ReasonCredentialError means the API key could not be read: the
+	// ProviderConfig or its Secret is missing, or the Secret has no such key.
+	ReasonCredentialError = "CredentialError"
 )
 
 // Finalizers and annotations owned by the operator.

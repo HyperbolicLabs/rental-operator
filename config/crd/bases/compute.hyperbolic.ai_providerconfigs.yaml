@@ -114,7 +114,9 @@ spec:
                 format: int64
                 type: integer
               conditions:
-                description: Conditions represent the current state (Ready, Authenticated).
+                description: |-
+                  Conditions are Ready and Authenticated (the API key works) and Synced
+                  (the last reconcile could read the key and reach the API).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

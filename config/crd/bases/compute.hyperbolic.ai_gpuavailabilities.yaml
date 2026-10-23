@@ -120,7 +120,9 @@ spec:
             description: status is the filtered catalogue view.
             properties:
               conditions:
-                description: Conditions represent the current state (Ready).
+                description: |-
+                  Conditions are Ready (offerings are populated) and Synced (the last
+                  catalog fetch succeeded, and False means the offerings may be stale).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

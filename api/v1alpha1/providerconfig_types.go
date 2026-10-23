@@ -38,7 +38,8 @@ type ProviderConfigSpec struct {
 
 // ProviderConfigStatus reflects credential validity and account balance.
 type ProviderConfigStatus struct {
-	// Conditions represent the current state (Ready, Authenticated).
+	// Conditions are Ready and Authenticated (the API key works) and Synced
+	// (the last reconcile could read the key and reach the API).
 	// +listType=map
 	// +listMapKey=type
 	// +optional
