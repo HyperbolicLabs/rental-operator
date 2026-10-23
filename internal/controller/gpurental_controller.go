@@ -87,6 +87,9 @@ type GPURentalReconciler struct {
 	Credentials *CredentialMemory
 	// Recorder emits events on GPURentals. Optional.
 	Recorder record.EventRecorder
+	// APIReader reads around the cache, to explain a Secret the cache does
+	// not hold (it is not labeled). Optional.
+	APIReader client.Reader
 }
 
 func (r *GPURentalReconciler) now() time.Time {
@@ -112,7 +115,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	creds, credErr := resolveRentalCreds(ctx, r.Client, &gr)
+	creds, credErr := resolveRentalCreds(ctx, r.Client, r.APIReader, &gr)
 	var hc *hyperbolic.Client
 	if credErr == nil {
 		hc, credErr = creds.newClient(r.NewClient)

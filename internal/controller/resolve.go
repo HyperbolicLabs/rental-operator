@@ -18,10 +18,12 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -37,15 +39,37 @@ type resolvedCreds struct {
 	apiKey   string
 }
 
-// apiKeyFromSecret reads the key value out of the referenced Secret.
-func apiKeyFromSecret(ctx context.Context, c client.Client, namespace string, ref hypv1alpha1.SecretKeySelector) (string, error) {
+// errSecretNotLabeled reports a credentials Secret without LabelCredentials.
+var errSecretNotLabeled = errors.New("secret is not labeled for the operator")
+
+// notLabeled explains how to fix a credentials Secret without the label.
+func notLabeled(namespace, name string) error {
+	return fmt.Errorf("%w: the operator only reads Secrets labeled %s=true; run: kubectl label secret -n %s %s %s=true",
+		errSecretNotLabeled, hypv1alpha1.LabelCredentials, namespace, name, hypv1alpha1.LabelCredentials)
+}
+
+// apiKeyFromSecret reads the key value out of the referenced Secret. The
+// Secret must carry LabelCredentials. The manager's cache holds only labeled
+// Secrets, so an unlabeled one looks missing through c, and uncached (optional)
+// is used once to tell the person which of the two it is.
+func apiKeyFromSecret(ctx context.Context, c client.Client, uncached client.Reader, namespace string, ref hypv1alpha1.SecretKeySelector) (string, error) {
 	key := ref.Key
 	if key == "" {
 		key = "api-key"
 	}
+	name := types.NamespacedName{Namespace: namespace, Name: ref.Name}
 	var secret corev1.Secret
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: ref.Name}, &secret); err != nil {
+	if err := c.Get(ctx, name, &secret); err != nil {
+		if apierrors.IsNotFound(err) && uncached != nil {
+			var direct corev1.Secret
+			if uncached.Get(ctx, name, &direct) == nil && !isCredentialsSecret(&direct) {
+				return "", notLabeled(namespace, ref.Name)
+			}
+		}
 		return "", fmt.Errorf("read secret %s/%s: %w", namespace, ref.Name, err)
+	}
+	if !isCredentialsSecret(&secret) {
+		return "", notLabeled(namespace, ref.Name)
 	}
 	raw, ok := secret.Data[key]
 	if !ok {
@@ -59,11 +83,11 @@ func apiKeyFromSecret(ctx context.Context, c client.Client, namespace string, re
 }
 
 // resolveProviderConfigCreds resolves creds directly from a ProviderConfig.
-func resolveProviderConfigCreds(ctx context.Context, c client.Client, pc *hypv1alpha1.ProviderConfig) (resolvedCreds, error) {
+func resolveProviderConfigCreds(ctx context.Context, c client.Client, uncached client.Reader, pc *hypv1alpha1.ProviderConfig) (resolvedCreds, error) {
 	if src := pc.Spec.Credentials.Source; src != "" && src != hypv1alpha1.CredentialsSourceSecret {
 		return resolvedCreds{}, fmt.Errorf("credentials source %q is not supported", src)
 	}
-	apiKey, err := apiKeyFromSecret(ctx, c, pc.Namespace, pc.Spec.Credentials.SecretRef)
+	apiKey, err := apiKeyFromSecret(ctx, c, uncached, pc.Namespace, pc.Spec.Credentials.SecretRef)
 	if err != nil {
 		return resolvedCreds{}, err
 	}
@@ -76,7 +100,7 @@ func resolveProviderConfigCreds(ctx context.Context, c client.Client, pc *hypv1a
 
 // resolveCreds resolves creds by reading the referenced ProviderConfig in the
 // given namespace.
-func resolveCreds(ctx context.Context, c client.Client, namespace string, pcRef hypv1alpha1.LocalRef) (resolvedCreds, error) {
+func resolveCreds(ctx context.Context, c client.Client, uncached client.Reader, namespace string, pcRef hypv1alpha1.LocalRef) (resolvedCreds, error) {
 	if pcRef.Name == "" {
 		return resolvedCreds{}, fmt.Errorf("providerConfigRef.name is required")
 	}
@@ -84,12 +108,12 @@ func resolveCreds(ctx context.Context, c client.Client, namespace string, pcRef 
 	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: pcRef.Name}, &pc); err != nil {
 		return resolvedCreds{}, fmt.Errorf("read providerConfig %s/%s: %w", namespace, pcRef.Name, err)
 	}
-	return resolveProviderConfigCreds(ctx, c, &pc)
+	return resolveProviderConfigCreds(ctx, c, uncached, &pc)
 }
 
 // resolveRentalCreds resolves creds for a GPURental.
-func resolveRentalCreds(ctx context.Context, c client.Client, r *hypv1alpha1.GPURental) (resolvedCreds, error) {
-	return resolveCreds(ctx, c, r.Namespace, r.Spec.ProviderConfigRef)
+func resolveRentalCreds(ctx context.Context, c client.Client, uncached client.Reader, r *hypv1alpha1.GPURental) (resolvedCreds, error) {
+	return resolveCreds(ctx, c, uncached, r.Namespace, r.Spec.ProviderConfigRef)
 }
 
 // ClientFactory builds a Hyperbolic API client for an endpoint and API key.

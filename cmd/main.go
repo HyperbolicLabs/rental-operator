@@ -161,6 +161,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
+		Cache:                  controller.ManagerCacheOptions(),
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
@@ -198,6 +199,7 @@ func main() {
 		NewClient:   newClient,
 		Credentials: controller.NewCredentialMemory(),
 		Recorder:    mgr.GetEventRecorderFor("gpurental-controller"),
+		APIReader:   mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURental")
 		os.Exit(1)
@@ -206,6 +208,7 @@ func main() {
 		Client:    mgr.GetClient(),
 		Scheme:    mgr.GetScheme(),
 		NewClient: newClient,
+		APIReader: mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)
@@ -216,6 +219,7 @@ func main() {
 		Catalog:         catalog,
 		RefreshInterval: catalogRefresh,
 		NewClient:       newClient,
+		APIReader:       mgr.GetAPIReader(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPUAvailability")
 		os.Exit(1)

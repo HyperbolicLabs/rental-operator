@@ -96,8 +96,13 @@ const (
 	ReasonCredentialError = "CredentialError"
 )
 
-// Finalizers and annotations owned by the operator.
+// Finalizers, labels and annotations owned by the operator.
 const (
+	// LabelCredentials must be "true" on Secrets that hold Hyperbolic API
+	// keys. The operator only reads and caches Secrets with this label, so it
+	// never holds the cluster's other Secrets in memory.
+	LabelCredentials = "compute.hyperbolic.ai/credentials"
+
 	// FinalizerTerminate holds a GPURental until its rental is terminated.
 	FinalizerTerminate = "compute.hyperbolic.ai/terminate"
 
