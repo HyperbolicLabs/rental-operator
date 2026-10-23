@@ -16,5 +16,21 @@ limitations under the License.
 
 package controller
 
+import (
+	"context"
+
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
 // ptr returns a pointer to v.
 func ptr[T any](v T) *T { return &v }
+
+// patchFinalizers applies change to obj's finalizers and writes only them,
+// failing on a concurrent change instead of overwriting it. An Update would
+// write the whole object back as the Go types serialize it ("ttl: 8h" becomes
+// "8h0m0s"), which bumps the generation and shows as drift in GitOps tools.
+func patchFinalizers(ctx context.Context, c client.Client, obj client.Object, change func()) error {
+	base := obj.DeepCopyObject().(client.Object)
+	change()
+	return c.Patch(ctx, obj, client.MergeFromWithOptions(base, client.MergeFromWithOptimisticLock{}))
+}

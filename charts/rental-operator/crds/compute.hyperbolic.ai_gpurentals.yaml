@@ -109,6 +109,27 @@ spec:
                 maxLength: 63
                 pattern: ^[a-z0-9][a-z0-9-]*$
                 type: string
+              lifetime:
+                default: {}
+                description: |-
+                  Lifetime bounds how long the rental runs and how long it may take to
+                  start. provisioningTimeout defaults to 30m.
+                properties:
+                  provisioningTimeout:
+                    default: 30m
+                    description: |-
+                      ProvisioningTimeout terminates a rental that has not reached Running
+                      this long after it was created (rentals that never run are not
+                      charged), instead of waiting for Hyperbolic's ~3 hour backstop.
+                    type: string
+                  ttl:
+                    description: |-
+                      TTL terminates the rental this long after it is first seen Running
+                      (when billing starts). The GPURental is kept as a record with reason
+                      TTLExpired, not deleted, so GitOps tools do not recreate it and rent
+                      again. It can be extended or shortened while the rental runs.
+                    type: string
+                type: object
               maxPriceCentsPerHour:
                 description: |-
                   MaxPriceCentsPerHour refuses to create the rental if the marketplace
@@ -282,6 +303,11 @@ spec:
                   in cents.
                 format: int64
                 type: integer
+              expiresAt:
+                description: ExpiresAt is when spec.lifetime.ttl will terminate the
+                  rental.
+                format: date-time
+                type: string
               instances:
                 description: Instances is the per-node SSH/IP/phase view (populated
                   once Running).
@@ -351,6 +377,18 @@ spec:
                 description: |-
                   RentalID is the server's rental id: the handle terminate and reboot
                   take, and how this rental is found when listing.
+                type: string
+              rentedAt:
+                description: |-
+                  RentedAt is when the operator created (or adopted) the rental. The
+                  provisioning timeout counts from here.
+                format: date-time
+                type: string
+              runningSince:
+                description: |-
+                  RunningSince is when the rental was first seen Running, which is when
+                  billing starts. The TTL counts from here.
+                format: date-time
                 type: string
               terminatedAt:
                 description: |-

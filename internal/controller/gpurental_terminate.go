@@ -211,8 +211,9 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 }
 
 func (r *GPURentalReconciler) removeFinalizer(ctx context.Context, gr *hypv1alpha1.GPURental) (ctrl.Result, error) {
-	controllerutil.RemoveFinalizer(gr, hypv1alpha1.FinalizerTerminate)
-	if err := r.Update(ctx, gr); err != nil {
+	if err := patchFinalizers(ctx, r.Client, gr, func() {
+		controllerutil.RemoveFinalizer(gr, hypv1alpha1.FinalizerTerminate)
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil

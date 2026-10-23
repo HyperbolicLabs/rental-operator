@@ -20,6 +20,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// Lifetime bounds how long a rental runs and how long it may take to start.
+type Lifetime struct {
+	// TTL terminates the rental this long after it is first seen Running
+	// (when billing starts). The GPURental is kept as a record with reason
+	// TTLExpired, not deleted, so GitOps tools do not recreate it and rent
+	// again. It can be extended or shortened while the rental runs.
+	// +optional
+	TTL *metav1.Duration `json:"ttl,omitempty"`
+
+	// ProvisioningTimeout terminates a rental that has not reached Running
+	// this long after it was created (rentals that never run are not
+	// charged), instead of waiting for Hyperbolic's ~3 hour backstop.
+	// +kubebuilder:default="30m"
+	// +optional
+	ProvisioningTimeout *metav1.Duration `json:"provisioningTimeout,omitempty"`
+}
+
 // GPURentalSpec defines the desired on-demand GPU rental. The rental's shape
 // (GPU type and count, region, network type, ports, display name) and its
 // providerConfigRef cannot change after the object is created: rentals
@@ -97,6 +114,12 @@ type GPURentalSpec struct {
 	// +optional
 	Terminated bool `json:"terminated,omitempty"`
 
+	// Lifetime bounds how long the rental runs and how long it may take to
+	// start. provisioningTimeout defaults to 30m.
+	// +kubebuilder:default={}
+	// +optional
+	Lifetime *Lifetime `json:"lifetime,omitempty"`
+
 	// DeletionPolicy decides what deleting this object does to the rental.
 	// Delete (the default) terminates it first, and the object is not removed
 	// until the rental is confirmed gone. Orphan removes the object and leaves
@@ -163,6 +186,12 @@ const (
 	// asking (the balance ran out, it was ended in the dashboard, hardware
 	// failed). It is never rented again automatically.
 	ReasonTerminatedExternally = "TerminatedExternally"
+	// ReasonTTLExpired means spec.lifetime.ttl ran out and the operator
+	// terminated the rental. The object is kept as a record.
+	ReasonTTLExpired = "TTLExpired"
+	// ReasonProvisioningTimedOut means the rental did not reach Running within
+	// spec.lifetime.provisioningTimeout and the operator terminated it.
+	ReasonProvisioningTimedOut = "ProvisioningTimedOut"
 	ReasonFailed               = "Failed"
 	ReasonUnknown              = "Unknown"
 	// Reasons a rental is Blocked: nothing was created and nothing is charged.
@@ -235,6 +264,20 @@ type GPURentalStatus struct {
 	// LastSyncTime is when the operator last reconciled against the API.
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
+
+	// RentedAt is when the operator created (or adopted) the rental. The
+	// provisioning timeout counts from here.
+	// +optional
+	RentedAt *metav1.Time `json:"rentedAt,omitempty"`
+
+	// RunningSince is when the rental was first seen Running, which is when
+	// billing starts. The TTL counts from here.
+	// +optional
+	RunningSince *metav1.Time `json:"runningSince,omitempty"`
+
+	// ExpiresAt is when spec.lifetime.ttl will terminate the rental.
+	// +optional
+	ExpiresAt *metav1.Time `json:"expiresAt,omitempty"`
 
 	// TerminatedAt is when the rental was observed terminated, by the
 	// operator (spec.terminated) or externally. Once set, this object is a

@@ -154,6 +154,8 @@ GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignor
      providerConfigRef: { name: default }
      gpuType: h100
      gpuCount: 8
+     lifetime:
+       ttl: 8h   # terminate 8 hours after it starts running
    ```
 
    ```console
@@ -175,7 +177,7 @@ GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignor
 
    The object stays (with phase `Terminating`) until Hyperbolic confirms the rental is gone, so you are never left paying for GPUs with nothing in the cluster pointing at them.
 
-> **Before you delete the cluster:** delete your GPURentals first. `kind delete cluster` (or losing a cluster any other way) removes the operator too, and nothing is left to terminate the rentals, which keep billing until you terminate them in the [dashboard](https://app.hyperbolic.ai).
+> **Before you delete the cluster:** delete your GPURentals first, and give rentals a `lifetime.ttl` so they end on their own. `kind delete cluster` (or losing a cluster any other way) removes the operator too, and nothing is left to terminate the rentals, which keep billing until you terminate them in the [dashboard](https://app.hyperbolic.ai).
 
 ## Custom resources
 
@@ -227,6 +229,8 @@ spec:
 | `ports` | []int | Ports to open on the instance IP (forge regions only, at most 20, unique, 1-65535). |
 | `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. Can be changed at any time. |
 | `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. This is one-way and cannot be unset. Create a new GPURental to rent again. |
+| `lifetime.ttl` | duration | Terminate the rental this long after it starts running (when billing starts) and keep the object as a record (`TTLExpired`). Can be changed while it runs. |
+| `lifetime.provisioningTimeout` | duration | Terminate a rental that hasn't reached Running this long after it was created (`ProvisioningTimedOut`). Default `30m`. |
 | `deletionPolicy` | `Delete` \| `Orphan` | What deleting the object does. `Delete` (default) terminates the rental first and keeps the object until it is confirmed gone. `Orphan` removes the object and leaves the rental running. |
 | `rebootGeneration` | int | Increase to reboot all nodes. |
 
@@ -243,6 +247,7 @@ spec:
 | `costCentsPerHour` | Current hourly cost, in cents. |
 | `openPorts` | Custom ports opened on the instance. |
 | `instances[]` | Per-node `instanceRef`, `phase`, `ssh`, `internalIp`. |
+| `rentedAt` / `runningSince` / `expiresAt` | When the rental was created, when it started running (billing starts), and when its TTL ends it. |
 | `terminatedAt` | When the rental was seen terminated. Once set, the object is a read-only record and never rents again. |
 | `conditions[]` | `Ready` and `Synced` (see below). |
 
@@ -342,6 +347,8 @@ kubectl describe gpurental train-run-42
 | `Running` | Rental is up; `status.instances[]` has your SSH. |
 | `Provisioning` | Rental created, waiting for nodes. |
 | `Terminated` | The operator terminated the rental (`spec.terminated`). The object stays as a record. |
+| `TTLExpired` | `spec.lifetime.ttl` ran out and the operator terminated the rental. The object stays as a record. |
+| `ProvisioningTimedOut` | The rental didn't reach Running within `spec.lifetime.provisioningTimeout` and was terminated (rentals that never run aren't charged). |
 | `TerminatedExternally` | The rental ended without the operator (balance ran out, ended in the dashboard, hardware failure). It is never rented again automatically. Create a new GPURental. |
 | `AvailabilityUnavailable` | No matching, in-stock option for that gpuType/count/region/fabric/price. Loosen the spec. |
 | `InsufficientBalance` | Not enough balance (+ overdraft) for ~1h. Top up. |

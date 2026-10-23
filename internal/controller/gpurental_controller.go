@@ -140,8 +140,9 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Ensure finalizer.
 	if !controllerutil.ContainsFinalizer(&gr, hypv1alpha1.FinalizerTerminate) {
-		controllerutil.AddFinalizer(&gr, hypv1alpha1.FinalizerTerminate)
-		if err := r.Update(ctx, &gr); err != nil {
+		if err := patchFinalizers(ctx, r.Client, &gr, func() {
+			controllerutil.AddFinalizer(&gr, hypv1alpha1.FinalizerTerminate)
+		}); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
@@ -331,6 +332,8 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if err := r.recordRentalID(ctx, gr, row.RentalID); err != nil {
 		return ctrl.Result{}, err
 	}
+	rentedAt := metav1.NewTime(r.now())
+	gr.Status.RentedAt = &rentedAt
 	gr.Status.RentalID = row.RentalID
 	if name, err := row.Name.Get(); err == nil {
 		gr.Status.Name = name
@@ -374,7 +377,22 @@ func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1
 	}
 
 	r.applyRentalToStatus(gr, vm)
-	return r.finish(ctx, gr, pollInterval(vm.Status))
+
+	// Lifetime: terminate on TTL or provisioning timeout, keeping the record.
+	reason, msg, until := r.checkLifetime(gr, vm)
+	if reason != "" {
+		done, res, err := r.terminate(ctx, gr, hc, key, msg)
+		if !done {
+			return res, err
+		}
+		r.markTerminated(gr, reason, msg)
+		return r.finish(ctx, gr, 0)
+	}
+	requeue := pollInterval(vm.Status)
+	if until > 0 && until < requeue {
+		requeue = until
+	}
+	return r.finish(ctx, gr, requeue)
 }
 
 // rebootInstances reboots every node that supports rebooting.
@@ -401,6 +419,10 @@ func (r *GPURentalReconciler) rebootInstances(ctx context.Context, hc *hyperboli
 
 // applyRentalToStatus maps a live rental onto CR status + conditions.
 func (r *GPURentalReconciler) applyRentalToStatus(gr *hypv1alpha1.GPURental, vm *hyperbolic.RentalWithStatus) {
+	if gr.Status.RentedAt == nil {
+		t := metav1.NewTime(r.now())
+		gr.Status.RentedAt = &t
+	}
 	gr.Status.Phase = rentalPhase(vm.Status)
 	gr.Status.RentalID = vm.RentalID
 	if name, err := vm.Name.Get(); err == nil {
