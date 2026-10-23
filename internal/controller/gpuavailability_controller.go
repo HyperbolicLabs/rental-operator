@@ -47,9 +47,9 @@ type GPUAvailabilityReconciler struct {
 	RefreshInterval time.Duration
 }
 
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=gpuavailabilities/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile filters the account catalogue into the object's status.

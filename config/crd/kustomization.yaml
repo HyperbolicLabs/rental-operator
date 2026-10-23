@@ -2,9 +2,9 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/hyperbolic.ai_gpurentals.yaml
-- bases/hyperbolic.ai_providerconfigs.yaml
-- bases/hyperbolic.ai_gpuavailabilities.yaml
+- bases/compute.hyperbolic.ai_gpurentals.yaml
+- bases/compute.hyperbolic.ai_providerconfigs.yaml
+- bases/compute.hyperbolic.ai_gpuavailabilities.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
