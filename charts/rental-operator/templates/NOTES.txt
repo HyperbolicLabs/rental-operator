@@ -13,7 +13,8 @@ rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Names
    kind: ProviderConfig
    metadata: { name: default, namespace: <your-namespace> }
    spec:
-     apiKeySecretRef: { name: hyperbolic-key, key: api-key }
+     credentials:
+       secretRef: { name: hyperbolic-key, key: api-key }
 
 3. Declare a rental:
 

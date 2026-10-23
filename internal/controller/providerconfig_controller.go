@@ -135,7 +135,7 @@ func (r *ProviderConfigReconciler) providerConfigsForSecret(ctx context.Context,
 	}
 	var reqs []reconcile.Request
 	for i := range list.Items {
-		if list.Items[i].Spec.APIKeySecretRef.Name == obj.GetName() {
+		if list.Items[i].Spec.Credentials.SecretRef.Name == obj.GetName() {
 			reqs = append(reqs, reconcile.Request{NamespacedName: client.ObjectKeyFromObject(&list.Items[i])})
 		}
 	}

@@ -57,30 +57,53 @@ spec:
           spec:
             description: spec is the credential and endpoint.
             properties:
-              apiKeySecretRef:
-                description: |-
-                  APIKeySecretRef points at a Secret in this namespace holding the
-                  Hyperbolic API key (an sk_live_... token).
+              credentials:
+                description: Credentials says where the Hyperbolic API key comes from.
                 properties:
-                  key:
-                    default: api-key
-                    description: key within the Secret whose value is the API key.
-                    type: string
-                  name:
-                    description: name of the Secret holding the Hyperbolic API key.
-                    minLength: 1
+                  secretRef:
+                    description: |-
+                      secretRef selects the Secret key, in this object's namespace, that
+                      holds the API key (an sk_live_... token).
+                    properties:
+                      key:
+                        default: api-key
+                        description: key within the Secret whose value is the API
+                          key.
+                        type: string
+                      name:
+                        description: name of the Secret holding the Hyperbolic API
+                          key.
+                        minLength: 1
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  source:
+                    default: Secret
+                    description: source of the API key.
+                    enum:
+                    - Secret
                     type: string
                 required:
-                - name
+                - secretRef
                 type: object
               endpoint:
                 default: https://api.hyperbolic.ai
                 description: |-
                   Endpoint is the Hyperbolic API base URL. Defaults to
-                  https://api.hyperbolic.ai.
+                  https://api.hyperbolic.ai. It must use https. Plain http is accepted
+                  only for loopback test servers, so an API key never crosses a network
+                  unencrypted.
+                maxLength: 2048
                 type: string
+                x-kubernetes-validations:
+                - message: endpoint must be an https URL. Plain http is allowed only
+                    for localhost, 127.0.0.1 or ::1
+                  rule: isURL(self) && (url(self).getScheme() == 'https' || (url(self).getScheme()
+                    == 'http' && url(self).getHostname() in ['localhost', '127.0.0.1',
+                    '::1']))
             required:
-            - apiKeySecretRef
+            - credentials
             type: object
           status:
             description: status is the observed credential/account state.

@@ -22,13 +22,16 @@ import (
 
 // ProviderConfigSpec holds the Hyperbolic credential and endpoint.
 type ProviderConfigSpec struct {
-	// APIKeySecretRef points at a Secret in this namespace holding the
-	// Hyperbolic API key (an sk_live_... token).
-	APIKeySecretRef SecretKeyRef `json:"apiKeySecretRef"`
+	// Credentials says where the Hyperbolic API key comes from.
+	Credentials Credentials `json:"credentials"`
 
 	// Endpoint is the Hyperbolic API base URL. Defaults to
-	// https://api.hyperbolic.ai.
+	// https://api.hyperbolic.ai. It must use https. Plain http is accepted
+	// only for loopback test servers, so an API key never crosses a network
+	// unencrypted.
 	// +kubebuilder:default=`https://api.hyperbolic.ai`
+	// +kubebuilder:validation:MaxLength=2048
+	// +kubebuilder:validation:XValidation:rule="isURL(self) && (url(self).getScheme() == 'https' || (url(self).getScheme() == 'http' && url(self).getHostname() in ['localhost', '127.0.0.1', '::1']))",message="endpoint must be an https URL. Plain http is allowed only for localhost, 127.0.0.1 or ::1"
 	// +optional
 	Endpoint string `json:"endpoint,omitempty"`
 }

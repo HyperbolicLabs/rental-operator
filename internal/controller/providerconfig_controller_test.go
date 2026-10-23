@@ -46,7 +46,9 @@ var _ = Describe("ProviderConfig Controller", func() {
 					Spec: hypv1alpha1.ProviderConfigSpec{
 						// Points at a Secret that doesn't exist, so validation fails
 						// gracefully and a SecretError condition is recorded.
-						APIKeySecretRef: hypv1alpha1.SecretKeyRef{Name: "missing", Key: "api-key"},
+						Credentials: hypv1alpha1.Credentials{
+							SecretRef: hypv1alpha1.SecretKeySelector{Name: "missing", Key: "api-key"},
+						},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

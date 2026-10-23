@@ -37,7 +37,7 @@ type resolvedCreds struct {
 }
 
 // apiKeyFromSecret reads the key value out of the referenced Secret.
-func apiKeyFromSecret(ctx context.Context, c client.Client, namespace string, ref hypv1alpha1.SecretKeyRef) (string, error) {
+func apiKeyFromSecret(ctx context.Context, c client.Client, namespace string, ref hypv1alpha1.SecretKeySelector) (string, error) {
 	key := ref.Key
 	if key == "" {
 		key = "api-key"
@@ -59,7 +59,10 @@ func apiKeyFromSecret(ctx context.Context, c client.Client, namespace string, re
 
 // resolveProviderConfigCreds resolves creds directly from a ProviderConfig.
 func resolveProviderConfigCreds(ctx context.Context, c client.Client, pc *hypv1alpha1.ProviderConfig) (resolvedCreds, error) {
-	apiKey, err := apiKeyFromSecret(ctx, c, pc.Namespace, pc.Spec.APIKeySecretRef)
+	if src := pc.Spec.Credentials.Source; src != "" && src != hypv1alpha1.CredentialsSourceSecret {
+		return resolvedCreds{}, fmt.Errorf("credentials source %q is not supported", src)
+	}
+	apiKey, err := apiKeyFromSecret(ctx, c, pc.Namespace, pc.Spec.Credentials.SecretRef)
 	if err != nil {
 		return resolvedCreds{}, err
 	}
