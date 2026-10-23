@@ -85,7 +85,7 @@ func configKey(gr *hypv1alpha1.GPURental) string {
 // the rental is confirmed gone, or when deletionPolicy is Orphan, or when no
 // rental was ever created. It never gives up silently: a stuck finalizer is
 // far cheaper than a GPU that keeps billing with nothing pointing at it.
-func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, credErr error) (ctrl.Result, error) {
+func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds resolvedCreds, credErr error) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	if !controllerutil.ContainsFinalizer(gr, hypv1alpha1.FinalizerTerminate) {
 		return ctrl.Result{}, nil
@@ -103,6 +103,7 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 	if credErr != nil {
 		rc, ok := r.Credentials.recall(configKey(gr))
 		if ok {
+			creds = rc
 			hc, credErr = rc.newClient(r.NewClient)
 		}
 	}
@@ -116,7 +117,7 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 		return r.finish(ctx, gr, apiRetry)
 	}
 
-	done, res, err := r.terminate(ctx, gr, hc, "GPURental deleted")
+	done, res, err := r.terminate(ctx, gr, hc, creds.key(), "GPURental deleted")
 	if !done {
 		return res, err
 	}
@@ -125,8 +126,8 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 
 // reconcileStop terminates the rental for spec.terminated=true and, once it
 // is confirmed gone, turns the object into a read-only record.
-func (r *GPURentalReconciler) reconcileStop(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client) (ctrl.Result, error) {
-	done, res, err := r.terminate(ctx, gr, hc, "spec.terminated=true")
+func (r *GPURentalReconciler) reconcileStop(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, key string) (ctrl.Result, error) {
+	done, res, err := r.terminate(ctx, gr, hc, key, "spec.terminated=true")
 	if !done {
 		return res, err
 	}
@@ -147,7 +148,7 @@ func (r *GPURentalReconciler) mayBeBilling(gr *hypv1alpha1.GPURental) bool {
 // terminate ends the object's rental and reports done once it is confirmed
 // gone (or nothing was ever created). When it returns done=false, the
 // returned result and error are the reconcile's outcome.
-func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, why string) (bool, ctrl.Result, error) {
+func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, key, why string) (bool, ctrl.Result, error) {
 	if !r.mayBeBilling(gr) {
 		return true, ctrl.Result{}, nil
 	}
@@ -184,7 +185,9 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 		}
 	}
 
-	if err := terminateRental(ctx, hc, id, why); err != nil {
+	err := terminateRental(ctx, hc, id, why)
+	r.Rentals.Invalidate(key)
+	if err != nil {
 		r.event(gr, corev1.EventTypeWarning, eventTerminateFailed, fmt.Sprintf("Terminating rental %s failed, retrying: %v", id, err))
 		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "terminate: "+err.Error())
 		res, err := r.finish(ctx, gr, apiRetry)

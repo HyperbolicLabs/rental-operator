@@ -209,6 +209,7 @@ func main() {
 		Catalog:                  catalog,
 		NewClient:                newClient,
 		Credentials:              controller.NewCredentialMemory(),
+		Rentals:                  controller.NewRentalCache(nil),
 		Recorder:                 mgr.GetEventRecorderFor("gpurental-controller"),
 		APIReader:                mgr.GetAPIReader(),
 		ClusterResourceNamespace: clusterResourceNamespace,
