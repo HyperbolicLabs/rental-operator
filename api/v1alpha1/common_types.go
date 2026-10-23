@@ -23,8 +23,8 @@ type LocalRef struct {
 	Name string `json:"name"`
 }
 
-// SecretKeyRef points at a single key inside a Secret in the same namespace.
-type SecretKeyRef struct {
+// SecretKeySelector selects one key of a Secret in the same namespace.
+type SecretKeySelector struct {
 	// name of the Secret holding the Hyperbolic API key.
 	// +kubebuilder:validation:MinLength=1
 	Name string `json:"name"`
@@ -32,6 +32,26 @@ type SecretKeyRef struct {
 	// +kubebuilder:default=api-key
 	// +optional
 	Key string `json:"key,omitempty"`
+}
+
+// CredentialsSource says where an API key is read from.
+// +kubebuilder:validation:Enum=Secret
+type CredentialsSource string
+
+// CredentialsSourceSecret reads the API key from a Kubernetes Secret.
+const CredentialsSourceSecret CredentialsSource = "Secret"
+
+// Credentials says where the Hyperbolic API key comes from. Only Secrets are
+// supported today, and source leaves room for others (for example an external
+// secret store) without another breaking change.
+type Credentials struct {
+	// source of the API key.
+	// +kubebuilder:default=Secret
+	// +optional
+	Source CredentialsSource `json:"source,omitempty"`
+	// secretRef selects the Secret key, in this object's namespace, that
+	// holds the API key (an sk_live_... token).
+	SecretRef SecretKeySelector `json:"secretRef"`
 }
 
 // Condition type strings used across the operator's CRDs.
