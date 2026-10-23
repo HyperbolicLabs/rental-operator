@@ -67,7 +67,7 @@ const (
 	// FinalizerTerminate holds a GPURental until its rental is terminated.
 	FinalizerTerminate = "compute.hyperbolic.ai/terminate"
 
-	// AnnotationRentalID records the rental's numeric id as soon as a create
+	// AnnotationRentalID records the rental's id as soon as a create
 	// succeeds, before status is written, so the id survives a failed status
 	// update.
 	AnnotationRentalID = "compute.hyperbolic.ai/rental-id"

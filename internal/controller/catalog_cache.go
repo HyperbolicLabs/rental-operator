@@ -25,7 +25,7 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 )
 
 // CatalogCache memoizes rental-options results per credential, so the operator
@@ -75,7 +75,7 @@ func (c *CatalogCache) Get(ctx context.Context, hc *hyperbolic.Client, key strin
 	}
 
 	_, fetchErr, _ := c.group.Do(key, func() (interface{}, error) {
-		opts, ferr := hc.GetRentalOptions(ctx)
+		opts, ferr := hc.Rentals.Options(ctx)
 		now := time.Now()
 		c.mu.Lock()
 		if ferr != nil {

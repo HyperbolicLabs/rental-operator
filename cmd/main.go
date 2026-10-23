@@ -38,6 +38,7 @@ import (
 
 	computev1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
 	"github.com/HyperbolicLabs/rental-operator/internal/controller"
+	"github.com/HyperbolicLabs/rental-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -186,18 +187,23 @@ func main() {
 	// so the operator calls castle once per account per interval, no matter how
 	// many GPUAvailability/GPURental objects consume it.
 	catalog := controller.NewCatalogCache(catalogRefresh)
+	// Every API request names the operator and SDK versions in its User-Agent,
+	// so adoption can be measured server-side without client telemetry.
+	newClient := controller.NewClientFactory("rental-operator/" + version.Version)
 
 	if err := (&controller.GPURentalReconciler{
-		Client:  mgr.GetClient(),
-		Scheme:  mgr.GetScheme(),
-		Catalog: catalog,
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		Catalog:   catalog,
+		NewClient: newClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURental")
 		os.Exit(1)
 	}
 	if err := (&controller.ProviderConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:    mgr.GetClient(),
+		Scheme:    mgr.GetScheme(),
+		NewClient: newClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)
@@ -207,6 +213,7 @@ func main() {
 		Scheme:          mgr.GetScheme(),
 		Catalog:         catalog,
 		RefreshInterval: catalogRefresh,
+		NewClient:       newClient,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPUAvailability")
 		os.Exit(1)
@@ -222,7 +229,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
+	setupLog.Info("starting manager", "version", version.Version)
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

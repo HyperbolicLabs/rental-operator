@@ -25,8 +25,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
+	"github.com/HyperbolicLabs/rental-operator/internal/version"
 )
 
 // resolvedCreds is an endpoint + API key pair resolved from a ProviderConfig or
@@ -68,7 +69,7 @@ func resolveProviderConfigCreds(ctx context.Context, c client.Client, pc *hypv1a
 	}
 	endpoint := pc.Spec.Endpoint
 	if endpoint == "" {
-		endpoint = hyperbolic.DefaultEndpoint
+		endpoint = hyperbolic.DefaultBaseURL
 	}
 	return resolvedCreds{endpoint: endpoint, apiKey: apiKey}, nil
 }
@@ -91,9 +92,29 @@ func resolveRentalCreds(ctx context.Context, c client.Client, r *hypv1alpha1.GPU
 	return resolveCreds(ctx, c, r.Namespace, r.Spec.ProviderConfigRef)
 }
 
-// newClient builds a Hyperbolic client from resolved creds.
-func (rc resolvedCreds) newClient() *hyperbolic.Client {
-	return hyperbolic.NewClient(rc.endpoint, rc.apiKey)
+// ClientFactory builds a Hyperbolic API client for an endpoint and API key.
+type ClientFactory func(endpoint, apiKey string) (*hyperbolic.Client, error)
+
+// NewClientFactory returns the ClientFactory the manager uses. Its clients
+// identify the operator in the User-Agent header and never retry on their
+// own: reconcilers requeue on errors, so a reconcile never blocks on backoff.
+func NewClientFactory(userAgent string) ClientFactory {
+	return func(endpoint, apiKey string) (*hyperbolic.Client, error) {
+		return hyperbolic.NewClient(apiKey,
+			hyperbolic.WithBaseURL(endpoint),
+			hyperbolic.WithUserAgent(userAgent),
+			hyperbolic.WithRetryPolicy(hyperbolic.NoRetries()),
+		)
+	}
+}
+
+// newClient builds a Hyperbolic client from resolved creds with f, or with
+// the default factory when f is nil.
+func (rc resolvedCreds) newClient(f ClientFactory) (*hyperbolic.Client, error) {
+	if f == nil {
+		f = NewClientFactory("rental-operator/" + version.Version)
+	}
+	return f(rc.endpoint, rc.apiKey)
 }
 
 // key is the CatalogCache key for these creds.

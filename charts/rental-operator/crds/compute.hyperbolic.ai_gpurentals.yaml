@@ -289,13 +289,6 @@ spec:
                   "conscious-bougainvillea-oryx"). Read-only; surfaced so a human can map
                   this CR to what the dashboard shows.
                 type: string
-              numericId:
-                description: |-
-                  NumericID is the server's numeric rental id. This is what the
-                  terminate/reboot APIs take (their `rentalId` parameter is this number,
-                  not the string RentalID above).
-                format: int64
-                type: integer
               observedGeneration:
                 description: ObservedGeneration is the spec generation last processed.
                 format: int64
@@ -317,8 +310,8 @@ spec:
                 type: string
               rentalId:
                 description: |-
-                  RentalID is the server's string (nanoid) rental id — the stable external
-                  handle, used to match this rental when listing.
+                  RentalID is the server's rental id: the handle terminate and reboot
+                  take, and how this rental is found when listing.
                 type: string
               terminated:
                 description: |-
