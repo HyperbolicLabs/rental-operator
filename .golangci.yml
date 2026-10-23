@@ -58,6 +58,10 @@ linters:
           - dupl
           - lll
         path: internal/*
+      # Test tables repeat literals on purpose. Constants would hide the data.
+      - linters:
+          - goconst
+        path: _test\.go
     paths:
       - third_party$
       - builtin$
