@@ -20,15 +20,31 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// GPURentalSpec defines the desired on-demand GPU rental.
+// GPURentalSpec defines the desired on-demand GPU rental. The rental's shape
+// (GPU type and count, region, network type, ports, display name) and its
+// providerConfigRef cannot change after the object is created: rentals
+// cannot be resized or moved to another account in place, and a rejected
+// edit is clearer than one that is silently ignored. Delete the object and
+// create a new one instead.
 // +kubebuilder:validation:XValidation:rule="!oldSelf.terminated || self.terminated",message="spec.terminated is one-way: it cannot be set back to false once true (the rental is gone; create a new GPURental to rent again)"
+// +kubebuilder:validation:XValidation:rule="self.gpuType == oldSelf.gpuType && self.gpuCount == oldSelf.gpuCount",message="gpuType and gpuCount are immutable. Create a new GPURental instead"
+// +kubebuilder:validation:XValidation:rule="has(self.region) == has(oldSelf.region) && (!has(self.region) || self.region == oldSelf.region)",message="region is immutable. Create a new GPURental instead"
+// +kubebuilder:validation:XValidation:rule="has(self.networkType) == has(oldSelf.networkType) && (!has(self.networkType) || self.networkType == oldSelf.networkType)",message="networkType is immutable. Create a new GPURental instead"
+// +kubebuilder:validation:XValidation:rule="has(self.ports) == has(oldSelf.ports) && (!has(self.ports) || self.ports == oldSelf.ports)",message="ports are immutable. Create a new GPURental instead"
+// +kubebuilder:validation:XValidation:rule="has(self.displayName) == has(oldSelf.displayName) && (!has(self.displayName) || self.displayName == oldSelf.displayName)",message="displayName is immutable. Create a new GPURental instead"
+// +kubebuilder:validation:XValidation:rule="self.providerConfigRef == oldSelf.providerConfigRef",message="providerConfigRef is immutable. Create a new GPURental instead"
 type GPURentalSpec struct {
 	// ProviderConfigRef selects the ProviderConfig (credential + endpoint) in
 	// this namespace to use for the rental.
 	ProviderConfigRef LocalRef `json:"providerConfigRef"`
 
-	// GPUType is the GPU model to rent.
-	// +kubebuilder:validation:Enum=h100;h200;b200;rtx-6000-pro
+	// GPUType is the GPU model to rent, as the catalog names it (for example
+	// h100, h200, b200 or rtx-6000-pro). It is checked against the account's
+	// catalog when the rental is created, so new models work without an
+	// operator upgrade. An unknown type leaves the rental Blocked with reason
+	// AvailabilityUnavailable.
+	// +kubebuilder:validation:Pattern=`^[a-z0-9][a-z0-9-]*$`
+	// +kubebuilder:validation:MaxLength=63
 	GPUType string `json:"gpuType"`
 
 	// GPUCount is the number of GPUs. Values >8 yield a multi-node rental (one
@@ -39,6 +55,7 @@ type GPURentalSpec struct {
 	// Region to rent in. If omitted, the operator auto-selects the cheapest
 	// region that has availability for (gpuType, gpuCount) — and, when Ports is
 	// set, only from regions that support custom ports.
+	// +kubebuilder:validation:MaxLength=63
 	// +optional
 	Region string `json:"region,omitempty"`
 
@@ -60,10 +77,12 @@ type GPURentalSpec struct {
 
 	// Ports is the list of ports to open directly on the instance's public IP
 	// (sent as the API's customPorts). Opened as-is (no NAT remapping). Only
-	// supported in forge regions; at most 20, unique, 1-65535. Immutable once
-	// the rental exists — changing this on a live rental is rejected with a
-	// condition; recreate to change ports.
+	// supported in forge regions, with at most 20 unique ports in 1-65535. Ports cannot be
+	// changed after creation. Recreate the GPURental to change them.
 	// +kubebuilder:validation:MaxItems=20
+	// +kubebuilder:validation:items:Minimum=1
+	// +kubebuilder:validation:items:Maximum=65535
+	// +listType=set
 	// +optional
 	Ports []int32 `json:"ports,omitempty"`
 
@@ -82,7 +101,9 @@ type GPURentalSpec struct {
 	RebootGeneration int32 `json:"rebootGeneration,omitempty"`
 
 	// MaxPriceCentsPerHour refuses to create the rental if the marketplace
-	// price for the resolved option exceeds this ceiling.
+	// price for the resolved option exceeds this ceiling. It can be changed at
+	// any time, for example to unblock a rental waiting for a cheaper offer.
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxPriceCentsPerHour *int64 `json:"maxPriceCentsPerHour,omitempty"`
 }
@@ -144,7 +165,7 @@ type GPURentalStatus struct {
 
 	// Conditions represent the current state of the rental (Ready, plus
 	// reasons such as Provisioning, AvailabilityUnavailable, InsufficientBalance,
-	// RegionDisabled, PortsUnsupportedInRegion, PortsImmutable).
+	// RegionDisabled, PortsUnsupportedInRegion).
 	// +listType=map
 	// +listMapKey=type
 	// +optional
