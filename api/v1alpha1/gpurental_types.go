@@ -167,7 +167,7 @@ type GPURentalStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=gpr
+// +kubebuilder:resource:shortName=gpr,categories=hyperbolic
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="GPU",type=string,JSONPath=`.spec.gpuType`
 // +kubebuilder:printcolumn:name="Count",type=integer,JSONPath=`.spec.gpuCount`

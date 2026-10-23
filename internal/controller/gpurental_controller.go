@@ -37,10 +37,7 @@ import (
 )
 
 const (
-	rentalFinalizer = "hyperbolic.ai/rental-cleanup"
-	annoNumericID   = "hyperbolic.ai/rental-numeric-id"
-	annoRebootedGen = "hyperbolic.ai/rebooted-generation"
-	machineTypeVM   = "virtual-machine"
+	machineTypeVM = "virtual-machine"
 
 	pendingPoll = 10 * time.Second
 	runningPoll = 60 * time.Second
@@ -92,10 +89,10 @@ type GPURentalReconciler struct {
 	Catalog *CatalogCache
 }
 
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=gpurentals,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=gpurentals/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=gpurentals/finalizers,verbs=update
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/finalizers,verbs=update
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile drives one GPURental toward its desired state.
@@ -115,8 +112,8 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Ensure finalizer.
-	if !controllerutil.ContainsFinalizer(&gr, rentalFinalizer) {
-		controllerutil.AddFinalizer(&gr, rentalFinalizer)
+	if !controllerutil.ContainsFinalizer(&gr, hypv1alpha1.FinalizerTerminate) {
+		controllerutil.AddFinalizer(&gr, hypv1alpha1.FinalizerTerminate)
 		if err := r.Update(ctx, &gr); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -153,7 +150,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 // reconcileDelete terminates the rental (best-effort) and removes the finalizer.
 func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alpha1.GPURental, creds resolvedCreds, credErr error) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(gr, rentalFinalizer) {
+	if !controllerutil.ContainsFinalizer(gr, hypv1alpha1.FinalizerTerminate) {
 		return ctrl.Result{}, nil
 	}
 	numericID := r.numericID(gr)
@@ -169,7 +166,7 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 		// Can't reach the API to terminate; don't block deletion forever.
 		log.Info("cannot terminate on delete (credentials unavailable); removing finalizer", "error", credErr.Error())
 	}
-	controllerutil.RemoveFinalizer(gr, rentalFinalizer)
+	controllerutil.RemoveFinalizer(gr, hypv1alpha1.FinalizerTerminate)
 	if err := r.Update(ctx, gr); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -202,7 +199,7 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 	// create, so a rental exists — never fall through to create from here (that
 	// would double-rent). On a transient list error, retry; if the rental is
 	// genuinely gone it was terminated externally, so stop (we don't re-rent).
-	if idStr := gr.Annotations[annoNumericID]; idStr != "" {
+	if idStr := gr.Annotations[hypv1alpha1.AnnotationRentalID]; idStr != "" {
 		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 			vm, err := r.findByNumericID(ctx, hc, id)
 			if err != nil {
@@ -374,7 +371,7 @@ func (r *GPURentalReconciler) rebootInstances(ctx context.Context, hc *hyperboli
 		rebooted = true
 	}
 	if rebooted {
-		r.setAnnotation(ctx, gr, annoRebootedGen, strconv.Itoa(int(gr.Spec.RebootGeneration)))
+		r.setAnnotation(ctx, gr, hypv1alpha1.AnnotationRebootedGeneration, strconv.Itoa(int(gr.Spec.RebootGeneration)))
 	}
 }
 
@@ -464,7 +461,7 @@ func (r *GPURentalReconciler) numericID(gr *hypv1alpha1.GPURental) int64 {
 	if gr.Status.NumericID != nil {
 		return *gr.Status.NumericID
 	}
-	if idStr := gr.Annotations[annoNumericID]; idStr != "" {
+	if idStr := gr.Annotations[hypv1alpha1.AnnotationRentalID]; idStr != "" {
 		if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
 			return id
 		}
@@ -473,7 +470,7 @@ func (r *GPURentalReconciler) numericID(gr *hypv1alpha1.GPURental) int64 {
 }
 
 func (r *GPURentalReconciler) stampNumericID(ctx context.Context, gr *hypv1alpha1.GPURental, id int64) {
-	r.setAnnotation(ctx, gr, annoNumericID, strconv.FormatInt(id, 10))
+	r.setAnnotation(ctx, gr, hypv1alpha1.AnnotationRentalID, strconv.FormatInt(id, 10))
 }
 
 func (r *GPURentalReconciler) setAnnotation(ctx context.Context, gr *hypv1alpha1.GPURental, k, v string) {
@@ -519,7 +516,7 @@ func (r *GPURentalReconciler) finish(ctx context.Context, gr *hypv1alpha1.GPURen
 }
 
 func appliedRebootGen(gr *hypv1alpha1.GPURental) int32 {
-	if v := gr.Annotations[annoRebootedGen]; v != "" {
+	if v := gr.Annotations[hypv1alpha1.AnnotationRebootedGeneration]; v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return int32(n)
 		}

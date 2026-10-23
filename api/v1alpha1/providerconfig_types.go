@@ -60,7 +60,7 @@ type ProviderConfigStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=hpc
+// +kubebuilder:resource:shortName=hpc,categories=hyperbolic
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
 // +kubebuilder:printcolumn:name="Balance",type=integer,JSONPath=`.status.balanceCents`,description="Balance in cents"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`

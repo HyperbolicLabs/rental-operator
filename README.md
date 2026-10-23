@@ -12,7 +12,7 @@ Rent [Hyperbolic](https://hyperbolic.ai) on-demand GPUs from your own Kubernetes
 Drop your Hyperbolic API key into a `Secret`, `kubectl apply` a `GPURental`, and the operator provisions the GPUs against the Hyperbolic public API, keeps them reconciled, and surfaces the SSH/connection details on the resource's status. Delete the object and the rental is terminated and the GPUs released.
 
 ```yaml
-apiVersion: hyperbolic.ai/v1alpha1
+apiVersion: compute.hyperbolic.ai/v1alpha1
 kind: GPURental
 metadata:
   name: train-run-42
@@ -111,7 +111,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 2. **Create a ProviderConfig:**
 
    ```yaml
-   apiVersion: hyperbolic.ai/v1alpha1
+   apiVersion: compute.hyperbolic.ai/v1alpha1
    kind: ProviderConfig
    metadata:
      name: default
@@ -132,7 +132,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 3. **Rent GPUs:**
 
    ```yaml
-   apiVersion: hyperbolic.ai/v1alpha1
+   apiVersion: compute.hyperbolic.ai/v1alpha1
    kind: GPURental
    metadata:
      name: train-run-42
@@ -223,6 +223,12 @@ $ kubectl get gpuavailability h100-ca -o jsonpath='{.status.offerings[0]}'
 The catalogue is personalized to your account (queried with your key), so it shows what your account can actually rent. `available` is the known in-stock count, or absent when the provider doesn't report stock. A shared per-account cache means many `GPUAvailability` objects on one account cost a single API call per refresh interval (`--catalog-refresh-interval`, default 5m).
 
 ## Common operations
+
+**List everything the operator manages** (every kind is in the `hyperbolic` category):
+```console
+kubectl get hyperbolic -A
+```
+Short names work too: `hpc` (ProviderConfig), `gpr` (GPURental), `gpa` (GPUAvailability).
 
 **Pick a region and fabric:**
 ```yaml

@@ -106,7 +106,7 @@ type GPUAvailabilityStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:shortName=gpa
+// +kubebuilder:resource:shortName=gpa,categories=hyperbolic
 // +kubebuilder:printcolumn:name="GPU",type=string,JSONPath=`.spec.gpuType`,description="gpuType filter (blank = any)"
 // +kubebuilder:printcolumn:name="Region",type=string,JSONPath=`.spec.region`,description="region filter (blank = any)"
 // +kubebuilder:printcolumn:name="Offerings",type=integer,JSONPath=`.status.offeringCount`

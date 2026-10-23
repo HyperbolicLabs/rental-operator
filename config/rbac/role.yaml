@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - hyperbolic.ai
+  - compute.hyperbolic.ai
   resources:
   - gpuavailabilities
   - gpurentals
@@ -27,7 +27,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - hyperbolic.ai
+  - compute.hyperbolic.ai
   resources:
   - gpuavailabilities/status
   - gpurentals/status
@@ -37,7 +37,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - hyperbolic.ai
+  - compute.hyperbolic.ai
   resources:
   - gpurentals/finalizers
   - providerconfigs/finalizers

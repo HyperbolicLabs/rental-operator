@@ -1,4 +1,4 @@
-apiVersion: hyperbolic.ai/v1alpha1
+apiVersion: compute.hyperbolic.ai/v1alpha1
 kind: GPUAvailability
 metadata:
   name: h100-us-central
