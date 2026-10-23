@@ -94,4 +94,10 @@ const (
 	// AnnotationRebootedGeneration records the spec.rebootGeneration that was
 	// last applied, so a reboot is not repeated.
 	AnnotationRebootedGeneration = "compute.hyperbolic.ai/rebooted-generation"
+
+	// AnnotationCreatePending is written, with a timestamp, before a create is
+	// sent. If it is present without a rental id, the outcome of that create
+	// is unknown and the operator looks the rental up by label before it
+	// creates anything again.
+	AnnotationCreatePending = "compute.hyperbolic.ai/create-pending"
 )
