@@ -31,7 +31,8 @@ type GPUAvailabilitySpec struct {
 	ProviderConfigRef LocalRef `json:"providerConfigRef"`
 
 	// GPUType filters to one model.
-	// +kubebuilder:validation:Enum=h100;h200;b200;rtx-6000-pro
+	// +kubebuilder:validation:Pattern=`^[a-z0-9][a-z0-9-]*$`
+	// +kubebuilder:validation:MaxLength=63
 	// +optional
 	GPUType string `json:"gpuType,omitempty"`
 
@@ -50,6 +51,7 @@ type GPUAvailabilitySpec struct {
 	NetworkType string `json:"networkType,omitempty"`
 
 	// MaxPriceCentsPerHour keeps only offerings at or below this hourly price.
+	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxPriceCentsPerHour *int64 `json:"maxPriceCentsPerHour,omitempty"`
 

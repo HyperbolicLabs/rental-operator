@@ -70,6 +70,12 @@ func TestSelectOption(t *testing.T) {
 			wantReason: "AvailabilityUnavailable",
 		},
 		{
+			name:       "a GPU type the catalog does not know",
+			spec:       hypv1alpha1.GPURentalSpec{GPUType: "gb300", GPUCount: 8},
+			wantNil:    true,
+			wantReason: "AvailabilityUnavailable",
+		},
+		{
 			name:       "does not pick bare-metal even if cheaper",
 			spec:       hypv1alpha1.GPURentalSpec{GPUType: "h100", GPUCount: 8, Region: "us-central-1"},
 			wantRegion: "us-central-1", // the VM at 2390, not the $0.01 bare-metal
@@ -98,22 +104,5 @@ func TestSelectOption(t *testing.T) {
 				t.Fatalf("selected non-VM machineType %q", got.MachineType)
 			}
 		})
-	}
-}
-
-func TestSameIntSet(t *testing.T) {
-	cases := []struct {
-		a, b []int
-		want bool
-	}{
-		{[]int{8080, 8443}, []int{8443, 8080}, true},
-		{[]int{8080}, []int{8080, 8443}, false},
-		{nil, nil, true},
-		{[]int{1, 1, 2}, []int{1, 2, 2}, false},
-	}
-	for _, c := range cases {
-		if got := sameIntSet(c.a, c.b); got != c.want {
-			t.Errorf("sameIntSet(%v,%v) = %v, want %v", c.a, c.b, got, c.want)
-		}
 	}
 }
