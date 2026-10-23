@@ -9,6 +9,13 @@ imagePullSecrets: []
 
 replicaCount: 1
 
+# Namespaces the operator watches. Empty (the default) watches every namespace
+# and grants the operator a ClusterRole, which lets it read Secrets in any
+# namespace. Listing namespaces installs a Role in each of them instead, so the
+# operator cannot read Secrets anywhere else: the least-privilege option.
+#   watchNamespaces: [ml-team, research]
+watchNamespaces: []
+
 # Leader election lets you run more than one replica safely.
 leaderElection:
   enabled: true

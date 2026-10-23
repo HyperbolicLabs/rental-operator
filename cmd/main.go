@@ -64,6 +64,7 @@ func main() {
 	var secureMetrics bool
 	var enableHTTP2 bool
 	var catalogRefresh time.Duration
+	var watchNamespaces string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -82,6 +83,8 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&watchNamespaces, "watch-namespaces", "",
+		"Comma-separated namespaces to watch. Empty watches every namespace, which needs cluster-wide RBAC.")
 	flag.DurationVar(&catalogRefresh, "catalog-refresh-interval", 5*time.Minute,
 		"How often to refresh the shared GPU marketplace catalogue that GPUAvailability reads.")
 	opts := zap.Options{
@@ -159,9 +162,14 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
+	namespaces := controller.ParseWatchNamespaces(watchNamespaces)
+	if len(namespaces) > 0 {
+		setupLog.Info("watching only these namespaces", "namespaces", namespaces)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Cache:                  controller.ManagerCacheOptions(),
+		Cache:                  controller.ManagerCacheOptions(namespaces),
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,

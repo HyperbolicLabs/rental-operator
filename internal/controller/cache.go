@@ -17,6 +17,8 @@ limitations under the License.
 package controller
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -36,11 +38,35 @@ func isCredentialsSecret(s *corev1.Secret) bool {
 // ManagerCacheOptions configures the manager's cache. It holds only Secrets
 // labeled compute.hyperbolic.ai/credentials=true: in a large cluster the
 // other Secrets (Helm releases, service account tokens, TLS keys) would
-// otherwise all be held in the operator's memory.
-func ManagerCacheOptions() cache.Options {
-	return cache.Options{
+// otherwise all be held in the operator's memory. With watchNamespaces set,
+// it watches only those namespaces, which is what lets the namespaced install
+// run with a Role per namespace instead of a ClusterRole.
+func ManagerCacheOptions(watchNamespaces []string) cache.Options {
+	opts := cache.Options{
 		ByObject: map[client.Object]cache.ByObject{
 			&corev1.Secret{}: {Label: labels.SelectorFromSet(labels.Set{hypv1alpha1.LabelCredentials: credentialsLabelValue})},
 		},
 	}
+	if len(watchNamespaces) > 0 {
+		opts.DefaultNamespaces = make(map[string]cache.Config, len(watchNamespaces))
+		for _, ns := range watchNamespaces {
+			opts.DefaultNamespaces[ns] = cache.Config{}
+		}
+	}
+	return opts
+}
+
+// ParseWatchNamespaces splits a comma-separated --watch-namespaces value,
+// dropping blanks and duplicates. Empty means every namespace.
+func ParseWatchNamespaces(v string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, ns := range strings.Split(v, ",") {
+		ns = strings.TrimSpace(ns)
+		if ns != "" && !seen[ns] {
+			seen[ns] = true
+			out = append(out, ns)
+		}
+	}
+	return out
 }
