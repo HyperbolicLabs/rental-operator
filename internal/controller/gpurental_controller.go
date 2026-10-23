@@ -27,6 +27,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -81,6 +82,11 @@ type GPURentalReconciler struct {
 	NewClient ClientFactory
 	// Clock tells the time. Optional, and nil uses the real clock.
 	Clock clock.PassiveClock
+	// Credentials remembers the last API key per ProviderConfig so rentals can
+	// still be terminated after their Secret is deleted. Optional.
+	Credentials *CredentialMemory
+	// Recorder emits events on GPURentals. Optional.
+	Recorder record.EventRecorder
 }
 
 func (r *GPURentalReconciler) now() time.Time {
@@ -95,6 +101,7 @@ func (r *GPURentalReconciler) now() time.Time {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/finalizers,verbs=update
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
 // Reconcile drives one GPURental toward its desired state.
 func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -109,6 +116,9 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	var hc *hyperbolic.Client
 	if credErr == nil {
 		hc, credErr = creds.newClient(r.NewClient)
+	}
+	if credErr == nil {
+		r.Credentials.remember(configKey(&gr), creds)
 	}
 
 	// Deletion.
@@ -152,48 +162,6 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Poll and reconcile live state.
 	return r.reconcilePoll(ctx, &gr, hc)
-}
-
-// reconcileDelete terminates the rental (best-effort) and removes the finalizer.
-func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, credErr error) (ctrl.Result, error) {
-	log := logf.FromContext(ctx)
-	if !controllerutil.ContainsFinalizer(gr, hypv1alpha1.FinalizerTerminate) {
-		return ctrl.Result{}, nil
-	}
-	rentalID := r.rentalID(gr)
-	if rentalID != "" && credErr == nil {
-		if err := terminateRental(ctx, hc, rentalID, "GPURental deleted"); err != nil {
-			// Already-terminated / not-found is success; otherwise retry.
-			if !isGoneError(err) {
-				log.Info("terminate on delete failed; will retry", "error", err.Error())
-				return ctrl.Result{RequeueAfter: apiRetry}, nil
-			}
-		}
-	} else if credErr != nil {
-		// Can't reach the API to terminate; don't block deletion forever.
-		log.Info("cannot terminate on delete (credentials unavailable); removing finalizer", "error", credErr.Error())
-	}
-	controllerutil.RemoveFinalizer(gr, hypv1alpha1.FinalizerTerminate)
-	if err := r.Update(ctx, gr); err != nil {
-		return ctrl.Result{}, err
-	}
-	return ctrl.Result{}, nil
-}
-
-// reconcileStop terminates the rental for spec.terminated=true and marks the CR
-// as a permanent read-only tombstone. One-way: the ids are kept for the record
-// and the rental is never re-provisioned.
-func (r *GPURentalReconciler) reconcileStop(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client) (ctrl.Result, error) {
-	rentalID := r.rentalID(gr)
-	if rentalID != "" {
-		if err := terminateRental(ctx, hc, rentalID, "spec.terminated=true"); err != nil && !isGoneError(err) {
-			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "terminate: "+err.Error())
-			return r.finish(ctx, gr, apiRetry)
-		}
-	}
-	r.markTerminated(gr, hypv1alpha1.ReasonTerminated, "Rental terminated (spec.terminated=true); this GPURental is now a read-only record")
-	r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
-	return r.finish(ctx, gr, 0)
 }
 
 // reconcileEnsureCreated adopts an orphaned rental or creates a new one.
@@ -664,12 +632,6 @@ func runningCount(insts []hypv1alpha1.InstanceStatus) int {
 		}
 	}
 	return n
-}
-
-func isGoneError(err error) bool {
-	// A terminate/reboot against an already-gone rental is success. The SDK's
-	// terminate already treats these as success. Reboot does not.
-	return hyperbolic.IsNotFound(err) || hyperbolic.HasCode(err, hyperbolic.CodeAlreadyTerminated)
 }
 
 func int32sToInts(in []int32) []int {
