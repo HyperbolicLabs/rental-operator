@@ -37,8 +37,9 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
-The manager's permissions: its CRDs, the Secrets holding API keys, and
-events on GPURentals. Granted cluster-wide, or per watched namespace.
+The manager's permissions on namespaced objects: its CRDs, the Secrets
+holding API keys, and events on GPURentals. Granted cluster-wide, or per
+watched namespace.
 */}}
 {{- define "rental-operator.managerRules" -}}
 - apiGroups: [""]
@@ -57,4 +58,24 @@ events on GPURentals. Granted cluster-wide, or per watched namespace.
 - apiGroups: [compute.hyperbolic.ai]
   resources: [gpurentals/status, providerconfigs/status, gpuavailabilities/status]
   verbs: [get, patch, update]
+{{- end }}
+
+{{/*
+The manager's permissions on cluster-scoped objects: ClusterProviderConfigs,
+and namespaces (their labels decide which ones a ClusterProviderConfig
+allows). These never include Secrets.
+*/}}
+{{- define "rental-operator.clusterRules" -}}
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [clusterproviderconfigs]
+  verbs: [get, list, watch, patch, update]
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [clusterproviderconfigs/finalizers]
+  verbs: [update]
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [clusterproviderconfigs/status]
+  verbs: [get, patch, update]
+- apiGroups: [""]
+  resources: [namespaces]
+  verbs: [get, list, watch]
 {{- end }}

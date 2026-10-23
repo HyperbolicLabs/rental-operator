@@ -28,6 +28,9 @@ resources:
 - providerconfig_admin_role.yaml
 - providerconfig_editor_role.yaml
 - providerconfig_viewer_role.yaml
+- clusterproviderconfig_admin_role.yaml
+- clusterproviderconfig_editor_role.yaml
+- clusterproviderconfig_viewer_role.yaml
 - gpurental_admin_role.yaml
 - gpurental_editor_role.yaml
 - gpurental_viewer_role.yaml

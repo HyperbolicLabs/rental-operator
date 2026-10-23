@@ -1,0 +1,20 @@
+apiVersion: compute.hyperbolic.ai/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: shared
+spec:
+  # The Secret lives in the operator's own namespace (rental-operator-system
+  # with the Helm chart), never in the namespaces that use this config.
+  # Create it with:
+  #   kubectl create secret generic hyperbolic-shared-key -n rental-operator-system \
+  #     --from-literal=api-key=sk_live_xxxxxxxxxxxxxxxxxxxx
+  #   kubectl label secret hyperbolic-shared-key -n rental-operator-system \
+  #     compute.hyperbolic.ai/credentials=true
+  credentials:
+    secretRef:
+      name: hyperbolic-shared-key
+      key: api-key
+  # Only namespaces with this label may rent through this config.
+  allowedNamespaces:
+    matchLabels:
+      hyperbolic.ai/tenant: ml

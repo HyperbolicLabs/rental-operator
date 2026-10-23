@@ -16,12 +16,30 @@ limitations under the License.
 
 package v1alpha1
 
-// LocalRef is a reference to another object in the same namespace by name.
-type LocalRef struct {
-	// name of the referenced object.
+// Kinds a ProviderConfigReference can point at.
+const (
+	ProviderConfigKind        = "ProviderConfig"
+	ClusterProviderConfigKind = "ClusterProviderConfig"
+)
+
+// ProviderConfigReference selects the Hyperbolic account (credentials and
+// endpoint) a resource uses.
+type ProviderConfigReference struct {
+	// kind is ProviderConfig (in the resource's own namespace, the default)
+	// or ClusterProviderConfig.
+	// +kubebuilder:validation:Enum=ProviderConfig;ClusterProviderConfig
+	// +kubebuilder:default=ProviderConfig
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// name of the referenced config.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
 	Name string `json:"name"`
 }
+
+// IsCluster reports whether the reference points at a ClusterProviderConfig.
+func (r ProviderConfigReference) IsCluster() bool { return r.Kind == ClusterProviderConfigKind }
 
 // SecretKeySelector selects one key of a Secret in the same namespace.
 type SecretKeySelector struct {

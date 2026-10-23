@@ -123,8 +123,8 @@ helm-lint: ## Lint the Helm chart and check that it renders in both install mode
 	helm lint charts/rental-operator --set 'watchNamespaces={team-a,team-b}'
 	helm template rental-operator charts/rental-operator > /dev/null
 	@helm template rental-operator charts/rental-operator --set 'watchNamespaces={team-a,team-b}' \
-		| grep -Eq '^kind: Cluster(Role|RoleBinding)$$' \
-		&& { echo "namespaced install must not create cluster-wide RBAC"; exit 1; } || true
+		| perl -0777 -ne 'for (split /^---$$/m) { exit 1 if /^kind: ClusterRole$$/m && /secrets/ }' \
+		|| { echo "namespaced install must not grant cluster-wide Secret access"; exit 1; }
 
 .PHONY: vulncheck
 vulncheck: govulncheck ## Scan dependencies and the standard library for known vulnerabilities.

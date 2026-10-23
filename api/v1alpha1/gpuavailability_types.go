@@ -26,9 +26,10 @@ import (
 // account can rent. All filter fields are optional; with none set it lists every
 // virtual-machine offering available to the account.
 type GPUAvailabilitySpec struct {
-	// ProviderConfigRef selects the ProviderConfig (credential + endpoint) in
-	// this namespace whose account catalogue to show.
-	ProviderConfigRef LocalRef `json:"providerConfigRef"`
+	// ProviderConfigRef selects the account whose catalogue to show: a
+	// ProviderConfig in this namespace (the default kind) or a
+	// ClusterProviderConfig.
+	ProviderConfigRef ProviderConfigReference `json:"providerConfigRef"`
 
 	// GPUType filters to one model.
 	// +kubebuilder:validation:Pattern=`^[a-z0-9][a-z0-9-]*$`

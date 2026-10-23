@@ -47,7 +47,7 @@ var _ = Describe("GPURental Controller", func() {
 						// References a ProviderConfig that doesn't exist, so the
 						// controller resolves credentials, fails gracefully, and
 						// records a condition without calling the real API.
-						ProviderConfigRef: hypv1alpha1.LocalRef{Name: "missing"},
+						ProviderConfigRef: hypv1alpha1.ProviderConfigReference{Name: "missing"},
 						GPUType:           "h100",
 						GPUCount:          1,
 					},

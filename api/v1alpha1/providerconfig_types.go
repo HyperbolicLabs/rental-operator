@@ -103,6 +103,57 @@ type ProviderConfigList struct {
 	Items           []ProviderConfig `json:"items"`
 }
 
+// ClusterProviderConfigSpec is a ProviderConfigSpec shared by several
+// namespaces.
+type ClusterProviderConfigSpec struct {
+	ProviderConfigSpec `json:",inline"`
+
+	// AllowedNamespaces selects, by namespace labels, the namespaces whose
+	// GPURentals and GPUAvailabilities may use this config. Omit it to allow
+	// every namespace. Select namespaces by name with the
+	// kubernetes.io/metadata.name label.
+	// +optional
+	AllowedNamespaces *metav1.LabelSelector `json:"allowedNamespaces,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,shortName=hcpc,categories=hyperbolic
+// +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
+// +kubebuilder:printcolumn:name="Balance",type=integer,JSONPath=`.status.balanceCents`,description="Balance in cents"
+// +kubebuilder:printcolumn:name="Rentals",type=integer,JSONPath=`.status.managedRentals`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+
+// ClusterProviderConfig connects many namespaces to one Hyperbolic account,
+// for platform teams that manage one API key centrally. Like cert-manager's
+// ClusterIssuer, its credentials Secret lives in the operator's own namespace,
+// so creating one never grants access to Secrets anywhere else.
+type ClusterProviderConfig struct {
+	metav1.TypeMeta `json:",inline"`
+
+	// metadata is standard object metadata.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// spec is the credential, endpoint and the namespaces allowed to use it.
+	// +required
+	Spec ClusterProviderConfigSpec `json:"spec"`
+
+	// status is the observed credential/account state.
+	// +optional
+	Status ProviderConfigStatus `json:"status,omitempty,omitzero"`
+}
+
+// +kubebuilder:object:root=true
+
+// ClusterProviderConfigList contains a list of ClusterProviderConfig.
+type ClusterProviderConfigList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ClusterProviderConfig `json:"items"`
+}
+
 func init() {
-	SchemeBuilder.Register(&ProviderConfig{}, &ProviderConfigList{})
+	SchemeBuilder.Register(&ProviderConfig{}, &ProviderConfigList{}, &ClusterProviderConfig{}, &ClusterProviderConfigList{})
 }

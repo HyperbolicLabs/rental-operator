@@ -14,11 +14,41 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - namespaces
   - secrets
   verbs:
   - get
   - list
   - watch
+- apiGroups:
+  - compute.hyperbolic.ai
+  resources:
+  - clusterproviderconfigs
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - compute.hyperbolic.ai
+  resources:
+  - clusterproviderconfigs/finalizers
+  - gpurentals/finalizers
+  - providerconfigs/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - compute.hyperbolic.ai
+  resources:
+  - clusterproviderconfigs/status
+  - gpuavailabilities/status
+  - gpurentals/status
+  - providerconfigs/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - compute.hyperbolic.ai
   resources:
@@ -33,20 +63,3 @@ rules:
   - patch
   - update
   - watch
-- apiGroups:
-  - compute.hyperbolic.ai
-  resources:
-  - gpuavailabilities/status
-  - gpurentals/status
-  - providerconfigs/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - compute.hyperbolic.ai
-  resources:
-  - gpurentals/finalizers
-  - providerconfigs/finalizers
-  verbs:
-  - update
