@@ -1,0 +1,8 @@
+# Generated files. GitHub collapses them in pull request diffs; review what
+# they are generated from (api/, the +kubebuilder markers) instead.
+**/zz_generated.*.go           linguist-generated=true
+config/crd/bases/**            linguist-generated=true
+config/rbac/role.yaml          linguist-generated=true
+charts/rental-operator/crds/** linguist-generated=true
+docs/reference/api.md          linguist-generated=true
+go.sum                         linguist-generated=true
