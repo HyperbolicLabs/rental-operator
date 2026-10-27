@@ -94,6 +94,9 @@ type GPURentalReconciler struct {
 	// ClusterResourceNamespace is the operator's own namespace, where
 	// ClusterProviderConfig Secrets live.
 	ClusterResourceNamespace string
+	// Rentals shares one list of active rentals per account among all
+	// GPURentals. Optional, and nil lists on every poll.
+	Rentals *RentalCache
 }
 
 func (r *GPURentalReconciler) now() time.Time {
@@ -132,7 +135,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// Deletion.
 	if !gr.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, &gr, hc, credErr)
+		return r.reconcileDelete(ctx, &gr, hc, creds, credErr)
 	}
 
 	// Ensure finalizer.
@@ -163,9 +166,9 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return r.finish(ctx, &gr, apiRetry)
 	}
 
-	// Explicit stop: terminate but keep the object (resume by setting it false).
+	// Explicit stop: terminate but keep the object as a record.
 	if gr.Spec.Terminated {
-		return r.reconcileStop(ctx, &gr, hc)
+		return r.reconcileStop(ctx, &gr, hc, creds.key())
 	}
 
 	// Ensure the rental exists (create or adopt).
@@ -174,7 +177,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	// Poll and reconcile live state.
-	return r.reconcilePoll(ctx, &gr, hc)
+	return r.reconcilePoll(ctx, &gr, hc, creds.key())
 }
 
 // reconcileEnsureCreated adopts an orphaned rental or creates a new one.
@@ -187,7 +190,7 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 	// would double-rent). On a transient list error, retry; if the rental is
 	// genuinely gone it was terminated externally, so stop (we don't re-rent).
 	if id := gr.Annotations[hypv1alpha1.AnnotationRentalID]; id != "" {
-		vm, err := r.findByRentalID(ctx, hc, id)
+		vm, err := r.findRental(ctx, hc, creds.key(), id)
 		if err != nil {
 			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
@@ -297,6 +300,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	}
 
 	row, err := hc.Rentals.Create(ctx, req)
+	r.Rentals.Invalidate(creds.key()) // whatever happened, the account's list may have changed
 	if hyperbolic.IsOutcomeUnknown(err) {
 		// The rental may exist. Keep create-pending and look it up by label on
 		// the next reconcile instead of retrying the create.
@@ -348,8 +352,8 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 }
 
 // reconcilePoll refreshes live status and applies requested reboots.
-func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client) (ctrl.Result, error) {
-	vm, err := r.findByRentalID(ctx, hc, gr.Status.RentalID)
+func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, key string) (ctrl.Result, error) {
+	vm, err := r.findRental(ctx, hc, key, gr.Status.RentalID)
 	if err != nil {
 		// Transient list error: keep the last-known phase and Ready, report it
 		// on Synced, and retry. Never flip a live rental to Terminated because
@@ -459,19 +463,41 @@ func (r *GPURentalReconciler) markTerminatedExternally(gr *hypv1alpha1.GPURental
 
 // ---- lookups -------------------------------------------------------------
 
-// findByRentalID returns (rental, nil) if found, (nil, nil) if the list
-// succeeded but the id isn't present, or (nil, err) on a list failure.
+// findRental looks the rental up in the account's shared list. A rental
+// missing from that list is looked up once more in a fresh one before it is
+// reported absent, so a cached list can never make a live rental look gone.
+func (r *GPURentalReconciler) findRental(ctx context.Context, hc *hyperbolic.Client, key, id string) (*hyperbolic.RentalWithStatus, error) {
+	if r.Rentals != nil {
+		rentals, err := r.Rentals.List(ctx, hc, key)
+		if err != nil {
+			return nil, err
+		}
+		if vm := rentalByID(rentals, id); vm != nil {
+			return vm, nil
+		}
+		r.Rentals.Invalidate(key)
+	}
+	return r.findByRentalID(ctx, hc, id)
+}
+
+// findByRentalID lists the account's rentals without the cache. It returns
+// (rental, nil) if found, (nil, nil) if the list succeeded but the id isn't
+// present, or (nil, err) on a list failure.
 func (r *GPURentalReconciler) findByRentalID(ctx context.Context, hc *hyperbolic.Client, id string) (*hyperbolic.RentalWithStatus, error) {
 	rentals, err := listRentals(ctx, hc)
 	if err != nil {
 		return nil, err
 	}
+	return rentalByID(rentals, id), nil
+}
+
+func rentalByID(rentals []hyperbolic.RentalWithStatus, id string) *hyperbolic.RentalWithStatus {
 	for i := range rentals {
 		if rentals[i].RentalID == id {
-			return &rentals[i], nil
+			return &rentals[i]
 		}
 	}
-	return nil, nil
+	return nil
 }
 
 // ---- small helpers -------------------------------------------------------
