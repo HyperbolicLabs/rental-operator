@@ -35,9 +35,13 @@ import (
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
 )
 
-// eventSSHKeysUpdated is emitted on a GPURental when the keys from its
-// spec.sshKeyRefs are attached to or detached from its rental.
-const eventSSHKeysUpdated = "SSHKeysUpdated"
+// eventSSHKeysUpdated is emitted on a GPURental, with action
+// actionUpdateSSHKeys, when the keys from its spec.sshKeyRefs are attached to
+// or detached from its rental.
+const (
+	eventSSHKeysUpdated = "SSHKeysUpdated"
+	actionUpdateSSHKeys = "UpdateSSHKeys"
+)
 
 // sshKeyIDs resolves spec.sshKeyRefs to the ids of the saved keys, sorted.
 // When a key cannot be used yet, it returns a message saying why instead.
@@ -115,8 +119,8 @@ func (r *GPURentalReconciler) applySSHKeys(ctx context.Context, gr *hypv1alpha1.
 		}
 	}
 	gr.Status.SSHKeyIDs = want
-	r.Recorder.Event(gr, corev1.EventTypeNormal, eventSSHKeysUpdated,
-		fmt.Sprintf("The SSH keys from spec.sshKeyRefs on rental %s are now %v", rentalID, want))
+	r.Recorder.Eventf(gr, nil, corev1.EventTypeNormal, eventSSHKeysUpdated, actionUpdateSSHKeys,
+		"The SSH keys from spec.sshKeyRefs on rental %s are now %v", rentalID, want)
 	return nil
 }
 
