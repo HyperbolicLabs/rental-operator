@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -90,6 +91,9 @@ type GPURentalReconciler struct {
 	// APIReader reads around the cache, to explain a Secret the cache does
 	// not hold (it is not labeled). Optional.
 	APIReader client.Reader
+	// ClusterResourceNamespace is the operator's own namespace, where
+	// ClusterProviderConfig Secrets live.
+	ClusterResourceNamespace string
 }
 
 func (r *GPURentalReconciler) now() time.Time {
@@ -103,6 +107,7 @@ func (r *GPURentalReconciler) now() time.Time {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/finalizers,verbs=update
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -115,7 +120,8 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	creds, credErr := resolveRentalCreds(ctx, r.Client, r.APIReader, &gr)
+	creds, credErr := credentialSource{client: r.Client, uncached: r.APIReader, clusterNamespace: r.ClusterResourceNamespace}.
+		forReference(ctx, gr.Namespace, gr.Spec.ProviderConfigRef)
 	var hc *hyperbolic.Client
 	if credErr == nil {
 		hc, credErr = creds.newClient(r.NewClient)
@@ -146,9 +152,13 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if credErr != nil {
 		log.Info("credentials not resolvable", "error", credErr.Error())
-		r.setSynced(&gr, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, credErr.Error())
+		reason := hypv1alpha1.ReasonCredentialError
+		if errors.Is(credErr, errNamespaceNotAllowed) {
+			reason = hypv1alpha1.ReasonNamespaceNotAllowed
+		}
+		r.setSynced(&gr, metav1.ConditionFalse, reason, credErr.Error())
 		if gr.Status.RentalID == "" {
-			r.setBlocked(&gr, hypv1alpha1.ReasonCredentialError, credErr.Error())
+			r.setBlocked(&gr, reason, credErr.Error())
 		}
 		return r.finish(ctx, &gr, apiRetry)
 	}

@@ -46,7 +46,7 @@ var _ = Describe("GPUAvailability Controller", func() {
 					Spec: hypv1alpha1.GPUAvailabilitySpec{
 						// Missing ProviderConfig, so cred resolution fails before any
 						// catalogue call and a CredentialError condition is recorded.
-						ProviderConfigRef: hypv1alpha1.LocalRef{Name: "missing"},
+						ProviderConfigRef: hypv1alpha1.ProviderConfigReference{Name: "missing"},
 					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())

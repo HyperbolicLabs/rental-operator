@@ -86,7 +86,7 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 		var informers cache.Cache
 
 		BeforeEach(func() {
-			opts := ManagerCacheOptions(nil)
+			opts := ManagerCacheOptions(nil, "")
 			opts.Scheme = k8sClient.Scheme()
 			var err error
 			informers, err = cache.New(cfg, opts)
@@ -123,7 +123,7 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 
 var _ = It("configures the cache to hold only labeled Secrets", func() {
 	var selectors []string
-	for obj, byObject := range ManagerCacheOptions(nil).ByObject {
+	for obj, byObject := range ManagerCacheOptions(nil, "").ByObject {
 		if _, isSecret := obj.(*corev1.Secret); isSecret {
 			selectors = append(selectors, byObject.Label.String())
 		}

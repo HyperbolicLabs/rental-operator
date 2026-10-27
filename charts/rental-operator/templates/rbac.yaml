@@ -31,6 +31,32 @@ subjects:
     name: {{ $sa }}
     namespace: {{ $.Release.Namespace }}
 {{- end }}
+---
+# ClusterProviderConfigs and namespaces are cluster-scoped, so even a
+# namespaced install needs this narrow ClusterRole. It grants no Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}-cluster-configs
+  labels:
+    {{- include "rental-operator.labels" . | nindent 4 }}
+rules:
+  {{- include "rental-operator.clusterRules" . | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}-cluster-configs
+  labels:
+    {{- include "rental-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}-cluster-configs
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
 {{- else }}
 ---
 # Cluster-wide install (the default): the operator watches every namespace.
@@ -42,6 +68,7 @@ metadata:
     {{- include "rental-operator.labels" . | nindent 4 }}
 rules:
   {{- include "rental-operator.managerRules" . | nindent 2 }}
+  {{- include "rental-operator.clusterRules" . | nindent 2 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -74,6 +101,13 @@ rules:
   - apiGroups: [""]
     resources: [events]
     verbs: [create, patch]
+  {{- if .Values.watchNamespaces }}
+  # ClusterProviderConfig Secrets live here (namespaced install only, since the
+  # cluster-wide install's ClusterRole already covers them).
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch]
+  {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

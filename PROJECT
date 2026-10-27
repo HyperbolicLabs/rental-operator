@@ -36,4 +36,12 @@ resources:
   kind: GPUAvailability
   path: github.com/HyperbolicLabs/rental-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+  controller: true
+  domain: hyperbolic.ai
+  group: compute
+  kind: ClusterProviderConfig
+  path: github.com/HyperbolicLabs/rental-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

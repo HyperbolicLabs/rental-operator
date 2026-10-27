@@ -40,7 +40,7 @@ var testClientFactory = NewClientFactory("rental-operator/test")
 type fakeAccount struct {
 	api       *hyperbolictest.Server
 	namespace string
-	config    hypv1alpha1.LocalRef
+	config    hypv1alpha1.ProviderConfigReference
 }
 
 // newFakeAccount starts a fake API (closed when the spec ends) and creates a
@@ -69,7 +69,7 @@ func newFakeAccount(ctx context.Context) *fakeAccount {
 	}
 	Expect(k8sClient.Create(ctx, pc)).To(Succeed())
 
-	return &fakeAccount{api: api, namespace: ns.Name, config: hypv1alpha1.LocalRef{Name: pc.Name}}
+	return &fakeAccount{api: api, namespace: ns.Name, config: hypv1alpha1.ProviderConfigReference{Name: pc.Name}}
 }
 
 // rental returns an unsaved GPURental for one H100 (the cheapest offering in

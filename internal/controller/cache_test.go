@@ -41,7 +41,7 @@ var _ = Describe("A namespaced install", func() {
 
 	It("only sees the namespaces it watches", func() {
 		watched, other := newFakeAccount(ctx), newFakeAccount(ctx) // both have a labeled Secret
-		opts := ManagerCacheOptions([]string{watched.namespace})
+		opts := ManagerCacheOptions([]string{watched.namespace}, "")
 		Expect(opts.DefaultNamespaces).To(HaveKey(watched.namespace))
 		opts.Scheme = k8sClient.Scheme()
 		informers, err := cache.New(cfg, opts)

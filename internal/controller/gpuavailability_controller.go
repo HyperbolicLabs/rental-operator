@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -51,11 +52,15 @@ type GPUAvailabilityReconciler struct {
 	// APIReader reads around the cache, to explain a Secret the cache does
 	// not hold (it is not labeled). Optional.
 	APIReader client.Reader
+	// ClusterResourceNamespace is the operator's own namespace, where
+	// ClusterProviderConfig Secrets live.
+	ClusterResourceNamespace string
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile filters the account catalogue into the object's status.
@@ -65,10 +70,15 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	creds, err := resolveCreds(ctx, r.Client, r.APIReader, ga.Namespace, ga.Spec.ProviderConfigRef)
+	creds, err := credentialSource{client: r.Client, uncached: r.APIReader, clusterNamespace: r.ClusterResourceNamespace}.
+		forReference(ctx, ga.Namespace, ga.Spec.ProviderConfigRef)
 	if err != nil {
-		r.setReady(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
-		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
+		reason := hypv1alpha1.ReasonCredentialError
+		if errors.Is(err, errNamespaceNotAllowed) {
+			reason = hypv1alpha1.ReasonNamespaceNotAllowed
+		}
+		r.setReady(&ga, metav1.ConditionFalse, reason, err.Error())
+		r.setSynced(&ga, metav1.ConditionFalse, reason, err.Error())
 		return r.finish(ctx, &ga, apiRetry)
 	}
 

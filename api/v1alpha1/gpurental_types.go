@@ -34,9 +34,10 @@ import (
 // +kubebuilder:validation:XValidation:rule="has(self.displayName) == has(oldSelf.displayName) && (!has(self.displayName) || self.displayName == oldSelf.displayName)",message="displayName is immutable. Create a new GPURental instead"
 // +kubebuilder:validation:XValidation:rule="self.providerConfigRef == oldSelf.providerConfigRef",message="providerConfigRef is immutable. Create a new GPURental instead"
 type GPURentalSpec struct {
-	// ProviderConfigRef selects the ProviderConfig (credential + endpoint) in
-	// this namespace to use for the rental.
-	ProviderConfigRef LocalRef `json:"providerConfigRef"`
+	// ProviderConfigRef selects the Hyperbolic account (credential + endpoint)
+	// to rent with: a ProviderConfig in this namespace (the default kind) or a
+	// ClusterProviderConfig.
+	ProviderConfigRef ProviderConfigReference `json:"providerConfigRef"`
 
 	// GPUType is the GPU model to rent, as the catalog names it (for example
 	// h100, h200, b200 or rtx-6000-pro). It is checked against the account's
@@ -170,6 +171,9 @@ const (
 	ReasonRegionDisabled           = "RegionDisabled"
 	ReasonPortsUnsupportedInRegion = "PortsUnsupportedInRegion"
 	ReasonNoSSHKey                 = "NoSSHKey"
+	// ReasonNamespaceNotAllowed means the ClusterProviderConfig does not allow
+	// this namespace (its allowedNamespaces selector does not match).
+	ReasonNamespaceNotAllowed = "NamespaceNotAllowed"
 	// ReasonCreateOutcomeUnknown means a create may have taken effect but the
 	// rental could not be identified unambiguously (several rentals carry
 	// this object's label). The operator stops and waits for a person rather

@@ -3,4 +3,5 @@ resources:
 - v1alpha1_gpurental.yaml
 - v1alpha1_providerconfig.yaml
 - v1alpha1_gpuavailability.yaml
+- v1alpha1_clusterproviderconfig.yaml
 # +kubebuilder:scaffold:manifestskustomizesamples
