@@ -57,6 +57,12 @@ type ProviderConfigStatus struct {
 	// +optional
 	LastChecked *metav1.Time `json:"lastChecked,omitempty"`
 
+	// ManagedRentals is how many GPURentals use this config and have not
+	// finished (their rental is not known to be terminated). While it is above
+	// zero, deleting the config waits.
+	// +optional
+	ManagedRentals int32 `json:"managedRentals,omitempty"`
+
 	// ObservedGeneration is the spec generation last processed.
 	// +optional
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
@@ -67,6 +73,7 @@ type ProviderConfigStatus struct {
 // +kubebuilder:resource:shortName=hpc,categories=hyperbolic
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
 // +kubebuilder:printcolumn:name="Balance",type=integer,JSONPath=`.status.balanceCents`,description="Balance in cents"
+// +kubebuilder:printcolumn:name="Rentals",type=integer,JSONPath=`.status.managedRentals`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
