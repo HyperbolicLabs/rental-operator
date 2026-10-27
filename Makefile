@@ -270,7 +270,7 @@ CRDIFY_VERSION ?= v0.6.0
 CRD_REF_DOCS_VERSION ?= v0.3.0
 # promtool comes from this Prometheus release (it cannot be go-installed).
 # renovate: datasource=github-releases depName=prometheus/prometheus
-PROMETHEUS_VERSION ?= v3.15.0
+PROMETHEUS_VERSION ?= v3.15.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
