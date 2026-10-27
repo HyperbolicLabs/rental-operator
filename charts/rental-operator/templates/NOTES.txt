@@ -3,9 +3,11 @@ rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Names
 1. Create a Secret with your Hyperbolic API key (in the namespace where your
    GPURentals will live):
 
+   read -rs HYPERBOLIC_API_KEY   # paste the key; it is not echoed or kept in history
    kubectl create secret generic hyperbolic-key \
      --namespace <your-namespace> \
-     --from-literal=api-key=sk_live_xxxxxxxxxxxxxxxxxxxx
+     --from-literal=api-key="$HYPERBOLIC_API_KEY"
+   unset HYPERBOLIC_API_KEY
    kubectl label secret hyperbolic-key --namespace <your-namespace> \
      compute.hyperbolic.ai/credentials=true
 
@@ -30,4 +32,6 @@ rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Names
 
    kubectl get gpurentals -n <your-namespace> -w
 
-Delete the GPURental to terminate the rental and release the GPUs.
+Delete the GPURental to terminate the rental and release the GPUs. Delete
+your GPURentals before uninstalling the operator or deleting the cluster:
+without the operator, nothing terminates them and they keep billing.
