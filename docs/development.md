@@ -1,6 +1,6 @@
 # Development
 
-Build, test and contribution rules are in [CONTRIBUTING.md](../CONTRIBUTING.md). This page covers running the operator locally and cutting a release.
+Build, test and contribution rules are in [CONTRIBUTING.md](../CONTRIBUTING.md). This page covers running the operator locally.
 
 - [Run it on kind](#run-it-on-kind)
 - [Run it out of cluster](#run-it-out-of-cluster)
@@ -38,8 +38,4 @@ make run         # run the controller locally
 
 ## Releasing
 
-Releases are cut with the **Release** workflow, run by hand on `main` and approved by an owner. It checks that lint, tests, verification and the end-to-end tests passed on the commit and chooses the version from the pull request titles since the last release. `make release-version` previews it. It then builds, signs and publishes the image and the chart, and only then creates the tag and the GitHub Release with generated notes and the packaged chart.
-
-Actions are pinned to commit SHAs. The committed `Chart.yaml` version is a placeholder set at package time, so a release changes no file.
-
-One-time setup: make the GHCR packages public, or give consumers a pull secret, and set the `ARTIFACTHUB_REPOSITORY_ID` Actions variable to the chart's Artifact Hub repository ID so Artifact Hub lists it under a verified publisher.
+Versioning, what a release contains and the maintainer checklist are in [RELEASE.md](../RELEASE.md).

@@ -54,6 +54,10 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	rm -f charts/rental-operator/crds/*.yaml
 	cp config/crd/bases/*.yaml charts/rental-operator/crds/
 
+.PHONY: api-docs
+api-docs: crd-ref-docs ## Generate the CRD reference, docs/reference/api.md, from the Go types.
+	$(CRD_REF_DOCS) --source-path=./api --config=hack/crd-ref-docs/config.yaml --renderer=markdown --output-path=docs/reference/api.md
+
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
@@ -116,9 +120,9 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 	$(GOLANGCI_LINT) config verify
 
 .PHONY: verify
-verify: manifests generate ## Fail if generated code, manifests, chart CRDs or go.mod are out of date.
-	@git diff --exit-code -- api config charts || { echo "Generated files are stale: run 'make manifests generate' and commit the result."; exit 1; }
-	@test -z "$$(git status --porcelain --untracked-files=all -- api config charts)" || { git status --porcelain --untracked-files=all -- api config charts; echo "Generated files are not committed."; exit 1; }
+verify: manifests generate api-docs ## Fail if generated code, manifests, chart CRDs, the API reference or go.mod are out of date.
+	@git diff --exit-code -- api config charts docs/reference || { echo "Generated files are stale: run 'make manifests generate api-docs' and commit the result."; exit 1; }
+	@test -z "$$(git status --porcelain --untracked-files=all -- api config charts docs/reference)" || { git status --porcelain --untracked-files=all -- api config charts docs/reference; echo "Generated files are not committed."; exit 1; }
 	go mod tidy -diff
 
 .PHONY: helm-lint
@@ -235,6 +239,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 CRDIFY ?= $(LOCALBIN)/crdify
+CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 
 ## Tool Versions
 # renovate: datasource=go depName=sigs.k8s.io/kustomize/kustomize/v5
@@ -251,6 +256,8 @@ GOLANGCI_LINT_VERSION ?= v2.15.0
 GOVULNCHECK_VERSION ?= v1.9.0
 # renovate: datasource=go depName=sigs.k8s.io/crdify
 CRDIFY_VERSION ?= v0.6.0
+# renovate: datasource=go depName=github.com/elastic/crd-ref-docs
+CRD_REF_DOCS_VERSION ?= v0.3.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -294,6 +301,11 @@ $(CRDIFY): $(LOCALBIN)
 # $1 - target path with name of binary
 # $2 - package url which can be installed
 # $3 - specific version of package
+.PHONY: crd-ref-docs
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+$(CRD_REF_DOCS): $(LOCALBIN)
+	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+
 define go-install-tool
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \
 set -e; \
