@@ -95,7 +95,8 @@ type GPUAvailabilityStatus struct {
 	// +optional
 	LastRefreshTime *metav1.Time `json:"lastRefreshTime,omitempty"`
 
-	// Conditions represent the current state (Ready).
+	// Conditions are Ready (offerings are populated) and Synced (the last
+	// catalog fetch succeeded, and False means the offerings may be stale).
 	// +listType=map
 	// +listMapKey=type
 	// +optional

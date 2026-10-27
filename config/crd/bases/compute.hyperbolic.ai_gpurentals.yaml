@@ -31,11 +31,18 @@ spec:
     - jsonPath: .status.region
       name: Region
       type: string
+    - jsonPath: .status.costCentsPerHour
+      name: Cents/Hr
+      type: integer
     - jsonPath: .status.rentalId
       name: Rental-ID
       type: string
     - jsonPath: .status.name
       name: Rental-Name
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Reason
+      priority: 1
       type: string
     - jsonPath: .metadata.creationTimestamp
       name: Age
@@ -187,9 +194,8 @@ spec:
             properties:
               conditions:
                 description: |-
-                  Conditions represent the current state of the rental (Ready, plus
-                  reasons such as Provisioning, AvailabilityUnavailable, InsufficientBalance,
-                  RegionDisabled, PortsUnsupportedInRegion).
+                  Conditions are Ready (is the rental running, the reason says why not)
+                  and Synced (could the last reconcile reach the Hyperbolic API).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -278,6 +284,11 @@ spec:
                   - instanceRef
                   type: object
                 type: array
+              label:
+                description: |-
+                  Label is the rental's label (the name shown in the dashboard), as the
+                  API reports it.
+                type: string
               lastSyncTime:
                 description: LastSyncTime is when the operator last reconciled against
                   the API.
@@ -288,6 +299,10 @@ spec:
                   Name is the server-generated random 3-word rental name (e.g.
                   "conscious-bougainvillea-oryx"). Read-only; surfaced so a human can map
                   this CR to what the dashboard shows.
+                type: string
+              networkType:
+                description: NetworkType is the rental's interconnect fabric (ethernet
+                  or infiniband).
                 type: string
               observedGeneration:
                 description: ObservedGeneration is the spec generation last processed.
@@ -302,8 +317,9 @@ spec:
                 type: array
               phase:
                 description: |-
-                  Phase mirrors the Hyperbolic rental status
-                  (Pending/Running/Rebooting/Terminating/Terminated/Failed/Unknown).
+                  Phase summarizes the rental for display: Blocked, Provisioning,
+                  Running, Rebooting, Terminating, Terminated, Failed or Unknown.
+                  Automation should read the Ready and Synced conditions instead.
                 type: string
               region:
                 description: Region is the resolved region the rental runs in.
@@ -313,12 +329,14 @@ spec:
                   RentalID is the server's rental id: the handle terminate and reboot
                   take, and how this rental is found when listing.
                 type: string
-              terminated:
+              terminatedAt:
                 description: |-
-                  Terminated is a sticky record that this rental was explicitly terminated
-                  (via spec.terminated). Once true the CR is a read-only tombstone and is
-                  never re-provisioned.
-                type: boolean
+                  TerminatedAt is when the rental was observed terminated, by the
+                  operator (spec.terminated) or externally. Once set, this object is a
+                  read-only record and is never provisioned again. Create a new GPURental
+                  to rent again.
+                format: date-time
+                type: string
             type: object
         required:
         - spec

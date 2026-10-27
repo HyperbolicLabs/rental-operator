@@ -50,7 +50,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 		Expect(acct.api.ActiveRentals()).To(HaveLen(1))
 		Expect(k8sClient.Get(ctx, key, gr)).To(Succeed())
 		Expect(gr.Status.RentalID).NotTo(BeEmpty())
-		Expect(gr.Status.Phase).To(Equal(phaseProvisioning))
+		Expect(gr.Status.Phase).To(Equal(hypv1alpha1.PhaseProvisioning))
 		Expect(gr.Annotations).To(HaveKeyWithValue(hypv1alpha1.AnnotationRentalID, Not(BeEmpty())))
 		id := gr.Status.RentalID
 
@@ -58,7 +58,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 		Expect(acct.api.SetRentalStatus(id, hyperbolic.RentalStatusRunning)).To(BeTrue())
 		reconcileOnce(ctx, r, key)
 		Expect(k8sClient.Get(ctx, key, gr)).To(Succeed())
-		Expect(gr.Status.Phase).To(Equal(string(hyperbolic.RentalStatusRunning)))
+		Expect(gr.Status.Phase).To(Equal(hypv1alpha1.PhaseRunning))
 		Expect(gr.Status.Instances).To(HaveLen(1))
 		Expect(gr.Status.Instances[0].SSH).NotTo(BeEmpty())
 		Expect(gr.Status.CostCentsPerHour).To(HaveValue(Equal(int64(275))))

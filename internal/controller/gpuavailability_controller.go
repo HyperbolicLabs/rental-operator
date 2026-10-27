@@ -64,19 +64,28 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	creds, err := resolveCreds(ctx, r.Client, ga.Namespace, ga.Spec.ProviderConfigRef)
 	if err != nil {
-		r.setReady(&ga, metav1.ConditionFalse, "CredentialError", err.Error())
+		r.setReady(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
+		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
 		return r.finish(ctx, &ga, apiRetry)
 	}
 
 	hc, err := creds.newClient(r.NewClient)
 	if err != nil {
-		r.setReady(&ga, metav1.ConditionFalse, "CredentialError", err.Error())
+		r.setReady(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
+		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
 		return r.finish(ctx, &ga, apiRetry)
 	}
 	options, fetchedAt, fetchErr := r.Catalog.Get(ctx, hc, creds.key())
-	if fetchErr != nil && len(options) == 0 {
-		r.setReady(&ga, metav1.ConditionFalse, "CatalogUnavailable", "rental-options: "+fetchErr.Error())
-		return r.finish(ctx, &ga, catalogRetry)
+	if fetchErr != nil {
+		// With an earlier catalog cached, keep showing it (Ready) but say the
+		// refresh failed (Synced=False) so the offerings are known to be stale.
+		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "rental-options: "+fetchErr.Error())
+		if len(options) == 0 {
+			r.setReady(&ga, metav1.ConditionFalse, "CatalogUnavailable", "rental-options: "+fetchErr.Error())
+			return r.finish(ctx, &ga, catalogRetry)
+		}
+	} else {
+		r.setSynced(&ga, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "Last reconcile reached the Hyperbolic API")
 	}
 
 	offerings := filterOfferings(options, ga.Spec)
@@ -103,6 +112,13 @@ func (r *GPUAvailabilityReconciler) setReady(ga *hypv1alpha1.GPUAvailability, st
 		ObservedGeneration: ga.Generation,
 	})
 	ga.Status.ObservedGeneration = ga.Generation
+}
+
+func (r *GPUAvailabilityReconciler) setSynced(ga *hypv1alpha1.GPUAvailability, status metav1.ConditionStatus, reason, msg string) {
+	apimeta.SetStatusCondition(&ga.Status.Conditions, metav1.Condition{
+		Type: hypv1alpha1.ConditionSynced, Status: status, Reason: reason, Message: msg,
+		ObservedGeneration: ga.Generation,
+	})
 }
 
 func (r *GPUAvailabilityReconciler) finish(ctx context.Context, ga *hypv1alpha1.GPUAvailability, requeue time.Duration) (ctrl.Result, error) {

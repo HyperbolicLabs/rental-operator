@@ -123,10 +123,51 @@ type InstanceStatus struct {
 	InternalIP string `json:"internalIp,omitempty"`
 }
 
+// Phases of a GPURental, for display. Automation should read conditions.
+const (
+	// PhaseBlocked means nothing has been rented yet and the rental cannot be
+	// created right now. The Ready condition's reason says why.
+	PhaseBlocked = "Blocked"
+	// PhaseProvisioning means the rental exists and is starting (the API's
+	// Pending).
+	PhaseProvisioning = "Provisioning"
+	PhaseRunning      = "Running"
+	PhaseRebooting    = "Rebooting"
+	PhaseTerminating  = "Terminating"
+	PhaseTerminated   = "Terminated"
+	PhaseFailed       = "Failed"
+	PhaseUnknown      = "Unknown"
+)
+
+// Reasons on a GPURental's Ready condition. The set is part of the API:
+// reasons are added over time but not renamed.
+const (
+	ReasonProvisioning = "Provisioning"
+	ReasonRunning      = "Running"
+	ReasonRebooting    = "Rebooting"
+	ReasonTerminating  = "Terminating"
+	// ReasonTerminated means the operator terminated the rental, because
+	// spec.terminated was set or the object is being deleted.
+	ReasonTerminated = "Terminated"
+	// ReasonTerminatedExternally means the rental ended without the operator
+	// asking (the balance ran out, it was ended in the dashboard, hardware
+	// failed). It is never rented again automatically.
+	ReasonTerminatedExternally = "TerminatedExternally"
+	ReasonFailed               = "Failed"
+	ReasonUnknown              = "Unknown"
+	// Reasons a rental is Blocked: nothing was created and nothing is charged.
+	ReasonAvailabilityUnavailable  = "AvailabilityUnavailable"
+	ReasonInsufficientBalance      = "InsufficientBalance"
+	ReasonRegionDisabled           = "RegionDisabled"
+	ReasonPortsUnsupportedInRegion = "PortsUnsupportedInRegion"
+	ReasonNoSSHKey                 = "NoSSHKey"
+)
+
 // GPURentalStatus is the observed state of a GPURental.
 type GPURentalStatus struct {
-	// Phase mirrors the Hyperbolic rental status
-	// (Pending/Running/Rebooting/Terminating/Terminated/Failed/Unknown).
+	// Phase summarizes the rental for display: Blocked, Provisioning,
+	// Running, Rebooting, Terminating, Terminated, Failed or Unknown.
+	// Automation should read the Ready and Synced conditions instead.
 	// +optional
 	Phase string `json:"phase,omitempty"`
 
@@ -141,9 +182,18 @@ type GPURentalStatus struct {
 	// +optional
 	Name string `json:"name,omitempty"`
 
+	// Label is the rental's label (the name shown in the dashboard), as the
+	// API reports it.
+	// +optional
+	Label string `json:"label,omitempty"`
+
 	// Region is the resolved region the rental runs in.
 	// +optional
 	Region string `json:"region,omitempty"`
+
+	// NetworkType is the rental's interconnect fabric (ethernet or infiniband).
+	// +optional
+	NetworkType string `json:"networkType,omitempty"`
 
 	// CostCentsPerHour is the current hourly cost of the rental, in cents.
 	// +optional
@@ -157,9 +207,8 @@ type GPURentalStatus struct {
 	// +optional
 	Instances []InstanceStatus `json:"instances,omitempty"`
 
-	// Conditions represent the current state of the rental (Ready, plus
-	// reasons such as Provisioning, AvailabilityUnavailable, InsufficientBalance,
-	// RegionDisabled, PortsUnsupportedInRegion).
+	// Conditions are Ready (is the rental running, the reason says why not)
+	// and Synced (could the last reconcile reach the Hyperbolic API).
 	// +listType=map
 	// +listMapKey=type
 	// +optional
@@ -169,11 +218,12 @@ type GPURentalStatus struct {
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 
-	// Terminated is a sticky record that this rental was explicitly terminated
-	// (via spec.terminated). Once true the CR is a read-only tombstone and is
-	// never re-provisioned.
+	// TerminatedAt is when the rental was observed terminated, by the
+	// operator (spec.terminated) or externally. Once set, this object is a
+	// read-only record and is never provisioned again. Create a new GPURental
+	// to rent again.
 	// +optional
-	Terminated bool `json:"terminated,omitempty"`
+	TerminatedAt *metav1.Time `json:"terminatedAt,omitempty"`
 
 	// ObservedGeneration is the spec generation last processed.
 	// +optional
@@ -187,8 +237,10 @@ type GPURentalStatus struct {
 // +kubebuilder:printcolumn:name="GPU",type=string,JSONPath=`.spec.gpuType`
 // +kubebuilder:printcolumn:name="Count",type=integer,JSONPath=`.spec.gpuCount`
 // +kubebuilder:printcolumn:name="Region",type=string,JSONPath=`.status.region`
+// +kubebuilder:printcolumn:name="Cents/Hr",type=integer,JSONPath=`.status.costCentsPerHour`
 // +kubebuilder:printcolumn:name="Rental-ID",type=string,JSONPath=`.status.rentalId`
 // +kubebuilder:printcolumn:name="Rental-Name",type=string,JSONPath=`.status.name`
+// +kubebuilder:printcolumn:name="Reason",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].reason`,priority=1
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 
 // GPURental is the Schema for the gpurentals API.
