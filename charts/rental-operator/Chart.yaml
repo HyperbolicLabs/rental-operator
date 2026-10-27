@@ -13,3 +13,94 @@ keywords:
   - operator
 maintainers:
   - name: Hyperbolic
+# Artifact Hub reads these to list the chart. The release workflow adds
+# artifacthub.io/prerelease for -rc versions. The CRD examples are checked
+# against the CRDs by internal/controller/samples_test.go.
+annotations:
+  artifacthub.io/operator: "true"
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/category: ai-machine-learning
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://www.hyperbolic.ai/docs/rental-operator/overview
+    - name: Source
+      url: https://github.com/HyperbolicLabs/rental-operator
+    - name: Support
+      url: https://github.com/HyperbolicLabs/rental-operator/discussions
+  artifacthub.io/crds: |
+    - kind: GPURental
+      version: v1alpha1
+      name: gpurentals.compute.hyperbolic.ai
+      displayName: GPU rental
+      description: One Hyperbolic on-demand rental. Deleting the object terminates it.
+    - kind: GPUAvailability
+      version: v1alpha1
+      name: gpuavailabilities.compute.hyperbolic.ai
+      displayName: GPU availability
+      description: The GPUs an account can rent, filtered by type, region and price.
+    - kind: ProviderConfig
+      version: v1alpha1
+      name: providerconfigs.compute.hyperbolic.ai
+      displayName: Provider config
+      description: Connects a namespace to a Hyperbolic account through a labeled Secret holding its API key.
+    - kind: ClusterProviderConfig
+      version: v1alpha1
+      name: clusterproviderconfigs.compute.hyperbolic.ai
+      displayName: Cluster provider config
+      description: Connects many namespaces to one Hyperbolic account, with the key kept in the operator's namespace.
+    - kind: SSHKey
+      version: v1alpha1
+      name: sshkeys.compute.hyperbolic.ai
+      displayName: SSH key
+      description: An SSH public key saved on the account, for GPURentals to authorize.
+  artifacthub.io/crdsExamples: |
+    - apiVersion: compute.hyperbolic.ai/v1alpha1
+      kind: GPURental
+      metadata:
+        name: train-run-42
+      spec:
+        providerConfigRef:
+          name: default
+        gpuType: h100
+        gpuCount: 8
+        sshKeyRefs:
+          - name: me
+    - apiVersion: compute.hyperbolic.ai/v1alpha1
+      kind: GPUAvailability
+      metadata:
+        name: h100-us-central
+      spec:
+        providerConfigRef:
+          name: default
+        gpuType: h100
+        region: us-central-1
+        onlyAvailable: true
+    - apiVersion: compute.hyperbolic.ai/v1alpha1
+      kind: ProviderConfig
+      metadata:
+        name: default
+      spec:
+        credentials:
+          secretRef:
+            name: hyperbolic-key
+            key: api-key
+    - apiVersion: compute.hyperbolic.ai/v1alpha1
+      kind: ClusterProviderConfig
+      metadata:
+        name: shared
+      spec:
+        credentials:
+          secretRef:
+            name: hyperbolic-shared-key
+            key: api-key
+        allowedNamespaces:
+          matchLabels:
+            hyperbolic.ai/tenant: ml
+    - apiVersion: compute.hyperbolic.ai/v1alpha1
+      kind: SSHKey
+      metadata:
+        name: me
+      spec:
+        providerConfigRef:
+          name: default
+        publicKey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGV4YW1wbGUta2V5LXJlcGxhY2Utd2l0aC15b3VycyEh me@laptop

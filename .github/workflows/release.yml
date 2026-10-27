@@ -134,12 +134,23 @@ jobs:
           version: v3.22.1
 
       - name: Package the chart at the release version
+        env:
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
         run: |
+          # Artifact Hub lists a pre-release chart version as one only when
+          # the chart carries this annotation.
+          if [ "$PRERELEASE" = true ]; then
+            perl -pi -e 's/^annotations:$/annotations:\n  artifacthub.io\/prerelease: "true"/' charts/rental-operator/Chart.yaml
+          fi
           mkdir -p dist
           helm package charts/rental-operator \
             --version "${{ steps.meta.outputs.version }}" \
             --app-version "${{ steps.meta.outputs.version }}" \
             --destination dist
+          if [ "$PRERELEASE" = true ]; then
+            helm show chart "dist/rental-operator-${{ steps.meta.outputs.version }}.tgz" | grep -q 'artifacthub.io/prerelease: "true"' \
+              || { echo "::error::the pre-release annotation is missing from the packaged chart"; exit 1; }
+          fi
 
       - name: Push the chart to GHCR (OCI)
         id: chart

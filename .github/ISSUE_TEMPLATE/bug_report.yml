@@ -28,7 +28,7 @@ body:
     id: kubernetes
     attributes:
       label: Kubernetes version and distribution
-      placeholder: v1.34 on EKS
+      placeholder: v1.36 on EKS
   - type: textarea
     id: logs
     attributes:
