@@ -41,3 +41,18 @@ const (
 	// ConditionAuthenticated indicates the API key authenticated successfully.
 	ConditionAuthenticated = "Authenticated"
 )
+
+// Finalizers and annotations owned by the operator.
+const (
+	// FinalizerTerminate holds a GPURental until its rental is terminated.
+	FinalizerTerminate = "compute.hyperbolic.ai/terminate"
+
+	// AnnotationRentalID records the rental's numeric id as soon as a create
+	// succeeds, before status is written, so the id survives a failed status
+	// update.
+	AnnotationRentalID = "compute.hyperbolic.ai/rental-id"
+
+	// AnnotationRebootedGeneration records the spec.rebootGeneration that was
+	// last applied, so a reboot is not repeated.
+	AnnotationRebootedGeneration = "compute.hyperbolic.ai/rebooted-generation"
+)

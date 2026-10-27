@@ -4,10 +4,12 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: providerconfigs.hyperbolic.ai
+  name: providerconfigs.compute.hyperbolic.ai
 spec:
-  group: hyperbolic.ai
+  group: compute.hyperbolic.ai
   names:
+    categories:
+    - hyperbolic
     kind: ProviderConfig
     listKind: ProviderConfigList
     plural: providerconfigs

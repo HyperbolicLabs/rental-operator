@@ -9,7 +9,7 @@ rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Names
 
 2. Point a ProviderConfig at it:
 
-   apiVersion: hyperbolic.ai/v1alpha1
+   apiVersion: compute.hyperbolic.ai/v1alpha1
    kind: ProviderConfig
    metadata: { name: default, namespace: <your-namespace> }
    spec:
@@ -17,7 +17,7 @@ rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Names
 
 3. Declare a rental:
 
-   apiVersion: hyperbolic.ai/v1alpha1
+   apiVersion: compute.hyperbolic.ai/v1alpha1
    kind: GPURental
    metadata: { name: train-run, namespace: <your-namespace> }
    spec:

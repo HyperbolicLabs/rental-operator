@@ -48,9 +48,9 @@ type ProviderConfigReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=providerconfigs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=hyperbolic.ai,resources=providerconfigs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 
 // Reconcile validates the credential and reports balance/readiness on status.

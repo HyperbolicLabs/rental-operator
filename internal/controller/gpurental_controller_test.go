@@ -82,7 +82,7 @@ var _ = Describe("GPURental Controller", func() {
 
 			got := &hypv1alpha1.GPURental{}
 			Expect(k8sClient.Get(ctx, typeNamespacedName, got)).To(Succeed())
-			Expect(got.Finalizers).To(ContainElement(rentalFinalizer))
+			Expect(got.Finalizers).To(ContainElement(hypv1alpha1.FinalizerTerminate))
 			cond := apimeta.FindStatusCondition(got.Status.Conditions, hypv1alpha1.ConditionReady)
 			Expect(cond).NotTo(BeNil())
 			Expect(cond.Reason).To(Equal("CredentialError"))

@@ -1,4 +1,4 @@
-apiVersion: hyperbolic.ai/v1alpha1
+apiVersion: compute.hyperbolic.ai/v1alpha1
 kind: GPURental
 metadata:
   name: train-run-42

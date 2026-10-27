@@ -1,7 +1,7 @@
 # This rule is not used by the project rental-operator itself.
 # It is provided to allow the cluster admin to help manage permissions for users.
 #
-# Grants read-only access to hyperbolic.ai resources.
+# Grants read-only access to compute.hyperbolic.ai resources.
 # This role is intended for users who need visibility into these resources
 # without permissions to modify them. It is ideal for monitoring purposes and limited-access viewing.
 
@@ -14,7 +14,7 @@ metadata:
   name: providerconfig-viewer-role
 rules:
 - apiGroups:
-  - hyperbolic.ai
+  - compute.hyperbolic.ai
   resources:
   - providerconfigs
   verbs:
@@ -22,7 +22,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - hyperbolic.ai
+  - compute.hyperbolic.ai
   resources:
   - providerconfigs/status
   verbs:
