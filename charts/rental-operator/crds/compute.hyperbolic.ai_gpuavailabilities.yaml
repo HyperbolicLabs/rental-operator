@@ -77,16 +77,14 @@ spec:
                 type: integer
               gpuType:
                 description: GPUType filters to one model.
-                enum:
-                - h100
-                - h200
-                - b200
-                - rtx-6000-pro
+                maxLength: 63
+                pattern: ^[a-z0-9][a-z0-9-]*$
                 type: string
               maxPriceCentsPerHour:
                 description: MaxPriceCentsPerHour keeps only offerings at or below
                   this hourly price.
                 format: int64
+                minimum: 1
                 type: integer
               networkType:
                 description: NetworkType filters to one interconnect fabric.

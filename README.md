@@ -178,15 +178,17 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | Spec field | Type | Description |
 |---|---|---|
 | `providerConfigRef.name` | string (required) | The ProviderConfig (credential + endpoint) in this namespace to use. |
-| `gpuType` | enum (required) | `h100`, `h200`, `b200`, `rtx-6000-pro`. |
+| `gpuType` | string (required) | GPU model as the catalog names it, e.g. `h100`, `h200`, `b200`, `rtx-6000-pro`. Checked against your account's catalog at create time, so new models work without an operator upgrade. |
 | `gpuCount` | int (required) | GPUs to rent. `>8` yields a multi-node rental. |
 | `region` | string | Region to rent in. Omit to auto-pick the cheapest available. |
 | `networkType` | enum | `ethernet` or `infiniband`. Omit to let the operator pick an available fabric. |
 | `displayName` | string, up to 40 characters | Name shown in the Hyperbolic dashboard (the rental label). Opt-in. |
-| `ports` | []int | Ports to open on the instance IP (forge regions only, ≤20, unique). Immutable once created. |
-| `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. |
+| `ports` | []int | Ports to open on the instance IP (forge regions only, at most 20, unique, 1-65535). |
+| `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. Can be changed at any time. |
 | `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. This is one-way and cannot be unset. Create a new GPURental to rent again. |
 | `rebootGeneration` | int | Increase to reboot all nodes. |
+
+`providerConfigRef`, `gpuType`, `gpuCount`, `region`, `networkType`, `ports` and `displayName` cannot change after the GPURental is created. The API server rejects the edit. Rentals can't be resized or moved to another account in place, so delete the object and create a new one (a `Blocked` rental never rented anything, so recreating it costs nothing).
 
 | Status field | Description |
 |---|---|
@@ -206,7 +208,7 @@ A filtered view of the marketplace **for your account**. The catalogue is person
 | Spec field | Type | Description |
 |---|---|---|
 | `providerConfigRef.name` | string (required) | The ProviderConfig whose account catalogue to show. |
-| `gpuType` | enum | Filter to one model. |
+| `gpuType` | string | Filter to one model. |
 | `gpuCount` | int | Filter to this GPU count. |
 | `region` | string | Filter to one region. |
 | `networkType` | enum | Filter to `ethernet` / `infiniband`. |
@@ -248,7 +250,7 @@ spec:
   gpuCount: 8
   ports: [8080, 8443, 6006]
 ```
-They open directly on the instance's public IP at the same numbers (`status.openPorts`). Ports cannot be changed on a live rental — to change them, delete and recreate.
+They open directly on the instance's public IP at the same numbers (`status.openPorts`). Ports cannot be changed after creation. To change them, delete and recreate.
 
 **Cap spend:**
 ```yaml
@@ -286,7 +288,6 @@ kubectl describe gpurental train-run-42
 | `InsufficientBalance` | Not enough balance (+ overdraft) for ~1h. Top up. |
 | `RegionDisabled` | The region isn't enabled for your account. Pick another or omit `region`. |
 | `PortsUnsupportedInRegion` | `spec.ports` set in a region without custom-port support. Use a supported region or drop `ports`. |
-| `PortsImmutable` | You changed `spec.ports` on a live rental. Recreate to change ports. |
 | `NoSSHKey` | Your account has no SSH key. Register one in the dashboard, then it retries. |
 | `CredentialError` | The Secret/key is missing or invalid. |
 

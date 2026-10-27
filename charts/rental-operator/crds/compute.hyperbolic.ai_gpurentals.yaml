@@ -81,18 +81,22 @@ spec:
                 minimum: 1
                 type: integer
               gpuType:
-                description: GPUType is the GPU model to rent.
-                enum:
-                - h100
-                - h200
-                - b200
-                - rtx-6000-pro
+                description: |-
+                  GPUType is the GPU model to rent, as the catalog names it (for example
+                  h100, h200, b200 or rtx-6000-pro). It is checked against the account's
+                  catalog when the rental is created, so new models work without an
+                  operator upgrade. An unknown type leaves the rental Blocked with reason
+                  AvailabilityUnavailable.
+                maxLength: 63
+                pattern: ^[a-z0-9][a-z0-9-]*$
                 type: string
               maxPriceCentsPerHour:
                 description: |-
                   MaxPriceCentsPerHour refuses to create the rental if the marketplace
-                  price for the resolved option exceeds this ceiling.
+                  price for the resolved option exceeds this ceiling. It can be changed at
+                  any time, for example to unblock a rental waiting for a cheaper offer.
                 format: int64
+                minimum: 1
                 type: integer
               networkType:
                 description: |-
@@ -108,14 +112,16 @@ spec:
                 description: |-
                   Ports is the list of ports to open directly on the instance's public IP
                   (sent as the API's customPorts). Opened as-is (no NAT remapping). Only
-                  supported in forge regions; at most 20, unique, 1-65535. Immutable once
-                  the rental exists — changing this on a live rental is rejected with a
-                  condition; recreate to change ports.
+                  supported in forge regions, with at most 20 unique ports in 1-65535. Ports cannot be
+                  changed after creation. Recreate the GPURental to change them.
                 items:
                   format: int32
+                  maximum: 65535
+                  minimum: 1
                   type: integer
                 maxItems: 20
                 type: array
+                x-kubernetes-list-type: set
               providerConfigRef:
                 description: |-
                   ProviderConfigRef selects the ProviderConfig (credential + endpoint) in
@@ -139,6 +145,7 @@ spec:
                   Region to rent in. If omitted, the operator auto-selects the cheapest
                   region that has availability for (gpuType, gpuCount) — and, when Ports is
                   set, only from regions that support custom ports.
+                maxLength: 63
                 type: string
               terminated:
                 default: false
@@ -158,6 +165,23 @@ spec:
             - message: 'spec.terminated is one-way: it cannot be set back to false
                 once true (the rental is gone; create a new GPURental to rent again)'
               rule: '!oldSelf.terminated || self.terminated'
+            - message: gpuType and gpuCount are immutable. Create a new GPURental
+                instead
+              rule: self.gpuType == oldSelf.gpuType && self.gpuCount == oldSelf.gpuCount
+            - message: region is immutable. Create a new GPURental instead
+              rule: has(self.region) == has(oldSelf.region) && (!has(self.region)
+                || self.region == oldSelf.region)
+            - message: networkType is immutable. Create a new GPURental instead
+              rule: has(self.networkType) == has(oldSelf.networkType) && (!has(self.networkType)
+                || self.networkType == oldSelf.networkType)
+            - message: ports are immutable. Create a new GPURental instead
+              rule: has(self.ports) == has(oldSelf.ports) && (!has(self.ports) ||
+                self.ports == oldSelf.ports)
+            - message: displayName is immutable. Create a new GPURental instead
+              rule: has(self.displayName) == has(oldSelf.displayName) && (!has(self.displayName)
+                || self.displayName == oldSelf.displayName)
+            - message: providerConfigRef is immutable. Create a new GPURental instead
+              rule: self.providerConfigRef == oldSelf.providerConfigRef
           status:
             description: status is the observed state of the rental.
             properties:
@@ -165,7 +189,7 @@ spec:
                 description: |-
                   Conditions represent the current state of the rental (Ready, plus
                   reasons such as Provisioning, AvailabilityUnavailable, InsufficientBalance,
-                  RegionDisabled, PortsUnsupportedInRegion, PortsImmutable).
+                  RegionDisabled, PortsUnsupportedInRegion).
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

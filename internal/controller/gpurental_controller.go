@@ -321,7 +321,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	return r.finish(ctx, gr, pendingPoll)
 }
 
-// reconcilePoll refreshes live status and handles reboot/ports drift.
+// reconcilePoll refreshes live status and applies requested reboots.
 func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client) (ctrl.Result, error) {
 	vm, err := r.findByNumericID(ctx, hc, *gr.Status.NumericID)
 	if err != nil {
@@ -334,17 +334,6 @@ func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1
 		gr.Status.Phase = hyperbolic.StatusTerminated
 		r.setReady(gr, metav1.ConditionFalse, "Terminated", "Rental no longer active")
 		return r.finish(ctx, gr, 0)
-	}
-
-	// Ports are immutable on a live rental — surface drift, don't act on it.
-	if portsDrifted(gr) {
-		apimeta.SetStatusCondition(&gr.Status.Conditions, metav1.Condition{
-			Type: "PortsImmutable", Status: metav1.ConditionTrue, Reason: "PortsImmutable",
-			Message:            "spec.ports differs from the rental's ports; ports cannot be changed on a live rental — recreate to change them",
-			ObservedGeneration: gr.Generation,
-		})
-	} else {
-		apimeta.RemoveStatusCondition(&gr.Status.Conditions, "PortsImmutable")
 	}
 
 	// Reboot if requested and possible.
@@ -524,15 +513,6 @@ func appliedRebootGen(gr *hypv1alpha1.GPURental) int32 {
 	return 0
 }
 
-func portsDrifted(gr *hypv1alpha1.GPURental) bool {
-	desired := int32sToInts(gr.Spec.Ports)
-	actual := int32sToInts(gr.Status.OpenPorts)
-	if len(desired) != len(actual) {
-		return len(gr.Spec.Ports) > 0 && !sameIntSet(desired, actual)
-	}
-	return !sameIntSet(desired, actual)
-}
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *GPURentalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -685,25 +665,6 @@ func intsToInt32s(in []int) []int32 {
 		out[i] = int32(v)
 	}
 	return out
-}
-
-func sameIntSet(a, b []int) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	seen := map[int]int{}
-	for _, x := range a {
-		seen[x]++
-	}
-	for _, x := range b {
-		seen[x]--
-	}
-	for _, v := range seen {
-		if v != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func regionSuffix(region string) string {
