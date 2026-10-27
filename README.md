@@ -31,8 +31,8 @@ spec:
 
 ```console
 $ kubectl get gpurentals
-NAME           PHASE     GPU    COUNT   REGION         CENTS/HR   RENTAL-ID   RENTAL-NAME                    AGE
-train-run-42   Running   h100   8       us-central-1   2200       8817        conscious-bougainvillea-oryx   6m
+NAME           PHASE     GPU    COUNT   REGION         CENTS/HR   RENTAL-ID      RENTAL-NAME                    AGE
+train-run-42   Running   h100   8       us-central-1   2200       B-k3Qm7vXa2P   conscious-bougainvillea-oryx   6m
 ```
 
 It is built to never spend money you didn't ask for: a create is never retried blindly (so a timeout can't rent twice), and a rental is never deleted from the cluster while it may still be billing.
@@ -208,7 +208,7 @@ helm install rental-operator \
 
 ## Security
 
-Your API key stays in a `Secret` you control. The operator caches only Secrets labeled `compute.hyperbolic.ai/credentials=true`, sends the key only to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status. Its only egress is `api.hyperbolic.ai:443`, and its blast radius is exactly what your API key can already do. See [Credentials](docs/architecture.md#credentials) and, for least privilege, the [namespaced install](docs/install.md#namespaced-install).
+Your API key stays in a `Secret` you control. The operator caches only Secrets labeled `compute.hyperbolic.ai/credentials=true`, sends the key only to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status. Outside the cluster it only calls the configured Hyperbolic endpoint, and its blast radius is exactly what your API key can already do. See [Credentials](docs/architecture.md#credentials) and, for least privilege, the [namespaced install](docs/install.md#namespaced-install).
 
 Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 
