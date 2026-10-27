@@ -105,7 +105,7 @@ helm install rental-operator ./charts/rental-operator \
   --set 'watchNamespaces={ml-team,research}'
 ```
 
-GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignored.
+GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignored. ClusterProviderConfigs still work: the chart adds a narrow `ClusterRole` for them and for reading namespace labels (no Secrets), and reads their Secrets only in the operator's namespace.
 
 > The chart ships the CRDs under `charts/rental-operator/crds/`. Helm installs CRDs on first install but does **not** upgrade them; on a chart upgrade that changes the CRDs, re-apply them with `kubectl apply -f charts/rental-operator/crds/`.
 
@@ -191,11 +191,34 @@ GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignor
 | `status.managedRentals` | int | GPURentals using this config that have not finished. While above zero, deleting the config waits (finalizer `compute.hyperbolic.ai/in-use`), so its credentials outlive the rentals they pay for. |
 | `status.conditions[]` | condition | `Ready`, `Authenticated`. |
 
+### ClusterProviderConfig
+
+A cluster-scoped ProviderConfig for platform teams that manage one Hyperbolic API key centrally and let several namespaces rent through it. It takes the same `spec` as a ProviderConfig plus `allowedNamespaces`, and rentals use it with `providerConfigRef: { kind: ClusterProviderConfig, name: shared }`.
+
+Like cert-manager's `ClusterIssuer`, its credentials Secret lives in the **operator's own namespace** (`rental-operator-system` with the chart), never in the namespaces that use it, so creating one never grants access to Secrets anywhere else. Label that Secret `compute.hyperbolic.ai/credentials=true` too.
+
+| Field | Type | Description |
+|---|---|---|
+| `spec.credentials`, `spec.endpoint` | | As on ProviderConfig. The Secret is read from the operator's namespace. |
+| `spec.allowedNamespaces` | label selector | Namespaces whose GPURentals and GPUAvailabilities may use this config, by namespace labels (`kubernetes.io/metadata.name` selects by name). Omit to allow every namespace. Others are Blocked with `NamespaceNotAllowed`. |
+
+```yaml
+apiVersion: compute.hyperbolic.ai/v1alpha1
+kind: ClusterProviderConfig
+metadata:
+  name: shared
+spec:
+  credentials:
+    secretRef: { name: hyperbolic-shared-key }
+  allowedNamespaces:
+    matchLabels: { hyperbolic.ai/tenant: ml }
+```
+
 ### GPURental
 
 | Spec field | Type | Description |
 |---|---|---|
-| `providerConfigRef.name` | string (required) | The ProviderConfig (credential + endpoint) in this namespace to use. |
+| `providerConfigRef` | `{kind, name}` (required) | The account to rent with: a ProviderConfig in this namespace (`kind` defaults to `ProviderConfig`) or a `ClusterProviderConfig`. |
 | `gpuType` | string (required) | GPU model as the catalog names it, e.g. `h100`, `h200`, `b200`, `rtx-6000-pro`. Checked against your account's catalog at create time, so new models work without an operator upgrade. |
 | `gpuCount` | int (required) | GPUs to rent. `>8` yields a multi-node rental. |
 | `region` | string | Region to rent in. Omit to auto-pick the cheapest available. |
@@ -254,7 +277,7 @@ The catalogue is personalized to your account (queried with your key), so it sho
 ```console
 kubectl get hyperbolic -A
 ```
-Short names work too: `hpc` (ProviderConfig), `gpr` (GPURental), `gpa` (GPUAvailability).
+Short names work too: `hpc` (ProviderConfig), `hcpc` (ClusterProviderConfig), `gpr` (GPURental), `gpa` (GPUAvailability).
 
 **Pick a region and fabric:**
 ```yaml
@@ -325,6 +348,7 @@ kubectl describe gpurental train-run-42
 | `RegionDisabled` | The region isn't enabled for your account. Pick another or omit `region`. |
 | `PortsUnsupportedInRegion` | `spec.ports` set in a region without custom-port support. Use a supported region or drop `ports`. |
 | `NoSSHKey` | Your account has no SSH key. Register one in the dashboard, then it retries. |
+| `NamespaceNotAllowed` | The ClusterProviderConfig's `allowedNamespaces` doesn't match this namespace. |
 | `CredentialError` | The Secret/key is missing or invalid. |
 | `APIError` | The Hyperbolic API failed (5xx, timeout, rate limit). Retried every 30s. |
 | `CreateOutcomeUnknown` | A create may have succeeded, but several active rentals carry this object's label, so the operator can't tell which is its own. It creates nothing more. Terminate the extras in the dashboard and it adopts the one left. |

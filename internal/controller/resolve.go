@@ -24,6 +24,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -82,38 +84,82 @@ func apiKeyFromSecret(ctx context.Context, c client.Client, uncached client.Read
 	return val, nil
 }
 
-// resolveProviderConfigCreds resolves creds directly from a ProviderConfig.
-func resolveProviderConfigCreds(ctx context.Context, c client.Client, uncached client.Reader, pc *hypv1alpha1.ProviderConfig) (resolvedCreds, error) {
-	if src := pc.Spec.Credentials.Source; src != "" && src != hypv1alpha1.CredentialsSourceSecret {
+// errNamespaceNotAllowed reports a ClusterProviderConfig whose
+// allowedNamespaces does not include the namespace using it.
+var errNamespaceNotAllowed = errors.New("namespace not allowed")
+
+// credentialSource resolves the Hyperbolic credentials resources refer to.
+type credentialSource struct {
+	client client.Client
+	// uncached reads around the cache, to explain a Secret the cache does not
+	// hold. Optional.
+	uncached client.Reader
+	// clusterNamespace is where ClusterProviderConfig Secrets live: the
+	// operator's own namespace.
+	clusterNamespace string
+}
+
+// fromSpec resolves a config's credentials. Its Secret is in secretNamespace.
+func (s credentialSource) fromSpec(ctx context.Context, spec *hypv1alpha1.ProviderConfigSpec, secretNamespace string) (resolvedCreds, error) {
+	if src := spec.Credentials.Source; src != "" && src != hypv1alpha1.CredentialsSourceSecret {
 		return resolvedCreds{}, fmt.Errorf("credentials source %q is not supported", src)
 	}
-	apiKey, err := apiKeyFromSecret(ctx, c, uncached, pc.Namespace, pc.Spec.Credentials.SecretRef)
+	if secretNamespace == "" {
+		return resolvedCreds{}, errors.New("the operator does not know its own namespace, where ClusterProviderConfig Secrets live; set --cluster-resource-namespace or the POD_NAMESPACE environment variable")
+	}
+	apiKey, err := apiKeyFromSecret(ctx, s.client, s.uncached, secretNamespace, spec.Credentials.SecretRef)
 	if err != nil {
 		return resolvedCreds{}, err
 	}
-	endpoint := pc.Spec.Endpoint
+	endpoint := spec.Endpoint
 	if endpoint == "" {
 		endpoint = hyperbolic.DefaultBaseURL
 	}
 	return resolvedCreds{endpoint: endpoint, apiKey: apiKey}, nil
 }
 
-// resolveCreds resolves creds by reading the referenced ProviderConfig in the
-// given namespace.
-func resolveCreds(ctx context.Context, c client.Client, uncached client.Reader, namespace string, pcRef hypv1alpha1.LocalRef) (resolvedCreds, error) {
-	if pcRef.Name == "" {
+// forReference resolves the credentials that a resource in namespace refers
+// to: a ProviderConfig in the same namespace, or a ClusterProviderConfig that
+// allows the namespace.
+func (s credentialSource) forReference(ctx context.Context, namespace string, ref hypv1alpha1.ProviderConfigReference) (resolvedCreds, error) {
+	if ref.Name == "" {
 		return resolvedCreds{}, fmt.Errorf("providerConfigRef.name is required")
 	}
-	var pc hypv1alpha1.ProviderConfig
-	if err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: pcRef.Name}, &pc); err != nil {
-		return resolvedCreds{}, fmt.Errorf("read providerConfig %s/%s: %w", namespace, pcRef.Name, err)
+	if ref.IsCluster() {
+		var cpc hypv1alpha1.ClusterProviderConfig
+		if err := s.client.Get(ctx, types.NamespacedName{Name: ref.Name}, &cpc); err != nil {
+			return resolvedCreds{}, fmt.Errorf("read clusterProviderConfig %s: %w", ref.Name, err)
+		}
+		if err := s.namespaceAllowed(ctx, &cpc, namespace); err != nil {
+			return resolvedCreds{}, err
+		}
+		return s.fromSpec(ctx, &cpc.Spec.ProviderConfigSpec, s.clusterNamespace)
 	}
-	return resolveProviderConfigCreds(ctx, c, uncached, &pc)
+	var pc hypv1alpha1.ProviderConfig
+	if err := s.client.Get(ctx, types.NamespacedName{Namespace: namespace, Name: ref.Name}, &pc); err != nil {
+		return resolvedCreds{}, fmt.Errorf("read providerConfig %s/%s: %w", namespace, ref.Name, err)
+	}
+	return s.fromSpec(ctx, &pc.Spec, namespace)
 }
 
-// resolveRentalCreds resolves creds for a GPURental.
-func resolveRentalCreds(ctx context.Context, c client.Client, uncached client.Reader, r *hypv1alpha1.GPURental) (resolvedCreds, error) {
-	return resolveCreds(ctx, c, uncached, r.Namespace, r.Spec.ProviderConfigRef)
+// namespaceAllowed checks a ClusterProviderConfig's allowedNamespaces.
+func (s credentialSource) namespaceAllowed(ctx context.Context, cpc *hypv1alpha1.ClusterProviderConfig, namespace string) error {
+	if cpc.Spec.AllowedNamespaces == nil {
+		return nil
+	}
+	selector, err := metav1.LabelSelectorAsSelector(cpc.Spec.AllowedNamespaces)
+	if err != nil {
+		return fmt.Errorf("clusterProviderConfig %s has an invalid allowedNamespaces: %w", cpc.Name, err)
+	}
+	var ns corev1.Namespace
+	if err := s.client.Get(ctx, types.NamespacedName{Name: namespace}, &ns); err != nil {
+		return fmt.Errorf("read namespace %s: %w", namespace, err)
+	}
+	if !selector.Matches(labels.Set(ns.Labels)) {
+		return fmt.Errorf("%w: clusterProviderConfig %s does not allow namespace %s (allowedNamespaces: %s)",
+			errNamespaceNotAllowed, cpc.Name, namespace, selector)
+	}
+	return nil
 }
 
 // ClientFactory builds a Hyperbolic API client for an endpoint and API key.

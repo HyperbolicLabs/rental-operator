@@ -73,8 +73,11 @@ func (m *CredentialMemory) recall(config string) (resolvedCreds, bool) {
 	return rc, ok
 }
 
-// configKey identifies the ProviderConfig a rental uses, for CredentialMemory.
+// configKey identifies the config a rental uses, for CredentialMemory.
 func configKey(gr *hypv1alpha1.GPURental) string {
+	if gr.Spec.ProviderConfigRef.IsCluster() {
+		return hypv1alpha1.ClusterProviderConfigKind + "/" + gr.Spec.ProviderConfigRef.Name
+	}
 	return gr.Namespace + "/" + gr.Spec.ProviderConfigRef.Name
 }
 

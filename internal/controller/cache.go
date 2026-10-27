@@ -40,19 +40,24 @@ func isCredentialsSecret(s *corev1.Secret) bool {
 // other Secrets (Helm releases, service account tokens, TLS keys) would
 // otherwise all be held in the operator's memory. With watchNamespaces set,
 // it watches only those namespaces, which is what lets the namespaced install
-// run with a Role per namespace instead of a ClusterRole.
-func ManagerCacheOptions(watchNamespaces []string) cache.Options {
-	opts := cache.Options{
-		ByObject: map[client.Object]cache.ByObject{
-			&corev1.Secret{}: {Label: labels.SelectorFromSet(labels.Set{hypv1alpha1.LabelCredentials: credentialsLabelValue})},
-		},
-	}
+// run with a Role per namespace instead of a ClusterRole. Secrets are then
+// also watched in clusterResourceNamespace, where ClusterProviderConfig
+// Secrets live.
+func ManagerCacheOptions(watchNamespaces []string, clusterResourceNamespace string) cache.Options {
+	secrets := cache.ByObject{Label: labels.SelectorFromSet(labels.Set{hypv1alpha1.LabelCredentials: credentialsLabelValue})}
+	opts := cache.Options{}
 	if len(watchNamespaces) > 0 {
 		opts.DefaultNamespaces = make(map[string]cache.Config, len(watchNamespaces))
+		secrets.Namespaces = make(map[string]cache.Config, len(watchNamespaces)+1)
 		for _, ns := range watchNamespaces {
 			opts.DefaultNamespaces[ns] = cache.Config{}
+			secrets.Namespaces[ns] = cache.Config{}
+		}
+		if clusterResourceNamespace != "" {
+			secrets.Namespaces[clusterResourceNamespace] = cache.Config{}
 		}
 	}
+	opts.ByObject = map[client.Object]cache.ByObject{&corev1.Secret{}: secrets}
 	return opts
 }
 

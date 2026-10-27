@@ -33,7 +33,7 @@ var _ = Describe("GPURental admission", func() {
 
 	newRental := func(spec hypv1alpha1.GPURentalSpec) *hypv1alpha1.GPURental {
 		n++
-		spec.ProviderConfigRef = hypv1alpha1.LocalRef{Name: "default"}
+		spec.ProviderConfigRef = hypv1alpha1.ProviderConfigReference{Name: "default"}
 		return &hypv1alpha1.GPURental{
 			ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("admission-%d", n), Namespace: "default"},
 			Spec:       spec,

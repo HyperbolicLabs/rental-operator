@@ -43,6 +43,12 @@ spec:
             {{- with .Values.watchNamespaces }}
             - --watch-namespaces={{ join "," . }}
             {{- end }}
+          env:
+            # ClusterProviderConfig Secrets live in the operator's namespace.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           ports:
             - name: health
               containerPort: {{ .Values.healthProbePort }}

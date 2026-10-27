@@ -65,6 +65,7 @@ func main() {
 	var enableHTTP2 bool
 	var catalogRefresh time.Duration
 	var watchNamespaces string
+	var clusterResourceNamespace string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -85,6 +86,8 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.StringVar(&watchNamespaces, "watch-namespaces", "",
 		"Comma-separated namespaces to watch. Empty watches every namespace, which needs cluster-wide RBAC.")
+	flag.StringVar(&clusterResourceNamespace, "cluster-resource-namespace", os.Getenv("POD_NAMESPACE"),
+		"Namespace where ClusterProviderConfig Secrets live. Defaults to the operator's own namespace (POD_NAMESPACE).")
 	flag.DurationVar(&catalogRefresh, "catalog-refresh-interval", 5*time.Minute,
 		"How often to refresh the shared GPU marketplace catalogue that GPUAvailability reads.")
 	opts := zap.Options{
@@ -169,7 +172,7 @@ func main() {
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Cache:                  controller.ManagerCacheOptions(namespaces),
+		Cache:                  controller.ManagerCacheOptions(namespaces, clusterResourceNamespace),
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
@@ -201,13 +204,14 @@ func main() {
 	newClient := controller.NewClientFactory("rental-operator/" + version.Version)
 
 	if err := (&controller.GPURentalReconciler{
-		Client:      mgr.GetClient(),
-		Scheme:      mgr.GetScheme(),
-		Catalog:     catalog,
-		NewClient:   newClient,
-		Credentials: controller.NewCredentialMemory(),
-		Recorder:    mgr.GetEventRecorderFor("gpurental-controller"),
-		APIReader:   mgr.GetAPIReader(),
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		Catalog:                  catalog,
+		NewClient:                newClient,
+		Credentials:              controller.NewCredentialMemory(),
+		Recorder:                 mgr.GetEventRecorderFor("gpurental-controller"),
+		APIReader:                mgr.GetAPIReader(),
+		ClusterResourceNamespace: clusterResourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURental")
 		os.Exit(1)
@@ -221,13 +225,24 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderConfig")
 		os.Exit(1)
 	}
+	if err := (&controller.ClusterProviderConfigReconciler{
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		NewClient:                newClient,
+		APIReader:                mgr.GetAPIReader(),
+		ClusterResourceNamespace: clusterResourceNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterProviderConfig")
+		os.Exit(1)
+	}
 	if err := (&controller.GPUAvailabilityReconciler{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
-		Catalog:         catalog,
-		RefreshInterval: catalogRefresh,
-		NewClient:       newClient,
-		APIReader:       mgr.GetAPIReader(),
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		Catalog:                  catalog,
+		RefreshInterval:          catalogRefresh,
+		NewClient:                newClient,
+		APIReader:                mgr.GetAPIReader(),
+		ClusterResourceNamespace: clusterResourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPUAvailability")
 		os.Exit(1)
