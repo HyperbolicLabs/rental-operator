@@ -39,14 +39,6 @@ const (
 	eventOrphaned           = "Orphaned"
 )
 
-// configKey identifies the config a rental uses, for account.CredentialsMemory.
-func configKey(gr *hypv1alpha1.GPURental) string {
-	if gr.Spec.ProviderConfigRef.IsCluster() {
-		return hypv1alpha1.ClusterProviderConfigKind + "/" + gr.Spec.ProviderConfigRef.Name
-	}
-	return gr.Namespace + "/" + gr.Spec.ProviderConfigRef.Name
-}
-
 // reconcileDelete terminates the rental and removes the finalizer only once
 // the rental is confirmed gone, or when deletionPolicy is Orphan, or when no
 // rental was ever created. It never gives up silently: a stuck finalizer is
@@ -67,7 +59,7 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 	}
 
 	if credErr != nil {
-		rc, ok := r.Credentials.Recall(configKey(gr))
+		rc, ok := r.Credentials.Recall(configKey(gr.Namespace, gr.Spec.ProviderConfigRef))
 		if ok {
 			creds = rc
 			hc, credErr = rc.Client(r.NewClient)

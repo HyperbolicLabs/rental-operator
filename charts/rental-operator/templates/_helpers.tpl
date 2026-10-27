@@ -45,18 +45,18 @@ watched namespace.
 - apiGroups: [""]
   resources: [secrets]
   verbs: [get, list, watch]
-# Events on GPURentals (termination progress and how to get unstuck).
+# Events on GPURentals and SSHKeys (progress and how to get unstuck).
 - apiGroups: [""]
   resources: [events]
   verbs: [create, patch]
 - apiGroups: [compute.hyperbolic.ai]
-  resources: [gpurentals, providerconfigs, gpuavailabilities]
+  resources: [gpurentals, providerconfigs, gpuavailabilities, sshkeys]
   verbs: [create, delete, get, list, patch, update, watch]
 - apiGroups: [compute.hyperbolic.ai]
-  resources: [gpurentals/finalizers, providerconfigs/finalizers]
+  resources: [gpurentals/finalizers, providerconfigs/finalizers, sshkeys/finalizers]
   verbs: [update]
 - apiGroups: [compute.hyperbolic.ai]
-  resources: [gpurentals/status, providerconfigs/status, gpuavailabilities/status]
+  resources: [gpurentals/status, providerconfigs/status, gpuavailabilities/status, sshkeys/status]
   verbs: [get, patch, update]
 {{- end }}
 

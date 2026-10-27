@@ -80,6 +80,30 @@ var _ = Describe("ProviderConfig in use", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, pcKey, &hypv1alpha1.ProviderConfig{}))).To(BeTrue())
 	})
 
+	It("waits for its SSHKeys before it can be deleted", func() {
+		kr := newSSHKeyReconciler()
+		name, _ := acct.saveSSHKey(ctx, kr, acct.sshKey("alice", "alice"))
+		reconcileOnce(ctx, pcr, pcKey)
+		Expect(config().Status.ManagedRentals).To(BeZero())
+
+		By("holding the config while the key may need deleting")
+		Expect(k8sClient.Delete(ctx, config())).To(Succeed())
+		reconcileOnce(ctx, pcr, pcKey)
+		ready := conditionOf(config().Status.Conditions, hypv1alpha1.ConditionReady)
+		Expect(ready.Reason).To(Equal("InUse"))
+		Expect(ready.Message).To(ContainSubstring("SSHKey alice"))
+
+		By("letting go once the key is deleted")
+		key := &hypv1alpha1.SSHKey{}
+		Expect(k8sClient.Get(ctx, name, key)).To(Succeed())
+		Expect(k8sClient.Delete(ctx, key)).To(Succeed())
+		reconcileOnce(ctx, kr, name)
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, name, key))).To(BeTrue())
+		Expect(acct.api.SSHKeys()).To(HaveLen(1), "only the fake's default key is left")
+		reconcileOnce(ctx, pcr, pcKey)
+		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, pcKey, &hypv1alpha1.ProviderConfig{}))).To(BeTrue())
+	})
+
 	It("is not held by a terminated record", func() {
 		r := newRentalReconciler()
 		gr := acct.rental("finished")
@@ -108,4 +132,15 @@ var _ = DescribeTable("GPURental updates that requeue its ProviderConfig",
 	Entry("deletion starting", func(gr *hypv1alpha1.GPURental) { now := metav1.Now(); gr.DeletionTimestamp = &now }, true),
 	Entry("becoming a terminated record", func(gr *hypv1alpha1.GPURental) { now := metav1.Now(); gr.Status.TerminatedAt = &now }, true),
 	Entry("its rental being created", func(gr *hypv1alpha1.GPURental) { gr.Status.RentalID = "rnt_7" }, true),
+)
+
+var _ = DescribeTable("SSHKey updates that requeue its ProviderConfig",
+	func(change func(*hypv1alpha1.SSHKey), want bool) {
+		before := &hypv1alpha1.SSHKey{}
+		after := before.DeepCopy()
+		change(after)
+		Expect(sshKeyUsageChanged.Update(event.UpdateEvent{ObjectOld: before, ObjectNew: after})).To(Equal(want))
+	},
+	Entry("a status update", func(k *hypv1alpha1.SSHKey) { k.Status.ID = 7 }, false),
+	Entry("deletion starting", func(k *hypv1alpha1.SSHKey) { now := metav1.Now(); k.DeletionTimestamp = &now }, true),
 )

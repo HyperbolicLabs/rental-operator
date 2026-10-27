@@ -66,18 +66,19 @@ flowchart LR
   you -. "ssh, address from status" .-> gpus
 ```
 
-Four custom resources, all in the `hyperbolic` category (`kubectl get hyperbolic -A`):
+Five custom resources, all in the `hyperbolic` category (`kubectl get hyperbolic -A`):
 
 - **`ProviderConfig`** points at the labeled `Secret` holding your API key, validates it, and reports your account's balance, active rentals and hourly cost as Hyperbolic reports them.
 - **`ClusterProviderConfig`** does the same for a key a platform team shares across namespaces. Its Secret stays in the operator's namespace.
 - **`GPURental`** is one on-demand rental. The operator creates it, polls it to Running, publishes SSH details on status, and on delete terminates it and waits until Hyperbolic confirms it is gone.
 - **`GPUAvailability`** is a filtered, always-fresh view of what your account can rent.
+- **`SSHKey`** saves an SSH public key on your account, so GPURentals can authorize it by name, and deletes it again with the object.
 
 [Architecture](docs/architecture.md) shows the GPURental lifecycle and how creates and deletes stay safe when the API times out, the operator restarts or a namespace is deleted.
 
 ## Quickstart
 
-You need Kubernetes 1.35 to 1.37, [Helm](https://helm.sh) 3, a Hyperbolic API key from the [dashboard](https://app.hyperbolic.ai), and an SSH public key registered on your Hyperbolic account. See [Install](docs/install.md) for the namespaced install, upgrades and uninstalling.
+You need Kubernetes 1.35 to 1.37, [Helm](https://helm.sh) 3, a Hyperbolic API key from the [dashboard](https://app.hyperbolic.ai), and an SSH public key. See [Install](docs/install.md) for the namespaced install, upgrades and uninstalling.
 
 ```console
 helm install rental-operator \
@@ -128,7 +129,23 @@ helm install rental-operator \
    default   https://api.hyperbolic.ai   124035    0          0         True    5s
    ```
 
-3. **Rent GPUs:**
+3. **Save your SSH key** on the account:
+
+   ```console
+   kubectl apply -f - <<EOF
+   apiVersion: compute.hyperbolic.ai/v1alpha1
+   kind: SSHKey
+   metadata:
+     name: me
+   spec:
+     providerConfigRef: { name: default }
+     publicKey: $(cat ~/.ssh/id_ed25519.pub)
+   EOF
+   ```
+
+   If the account already has this key, the SSHKey adopts it and never deletes it.
+
+4. **Rent GPUs:**
 
    ```yaml
    apiVersion: compute.hyperbolic.ai/v1alpha1
@@ -139,20 +156,22 @@ helm install rental-operator \
      providerConfigRef: { name: default }
      gpuType: h100
      gpuCount: 8
+     sshKeyRefs:
+       - name: me
    ```
 
    ```console
    $ kubectl get gpurental train-run-42 -w
    ```
 
-4. **Get your SSH connection** once it's Running:
+5. **Get your SSH connection** once it's Running:
 
    ```console
    $ kubectl get gpurental train-run-42 -o jsonpath='{.status.instances[*].ssh}'
    root@144.202.10.31:22
    ```
 
-5. **Release the GPUs** by deleting the object:
+6. **Release the GPUs** by deleting the object:
 
    ```console
    $ kubectl delete gpurental train-run-42
@@ -181,7 +200,7 @@ helm install rental-operator \
 
 ## Limitations
 
-- **SSH keys are not managed by the operator.** Rentals use the SSH key registered on your Hyperbolic account, or under an organization, the organization's newest key. Register one before renting, and remember that a teammate adding a key changes which key the next rental gets.
+- **A saved key becomes the account's default.** A rental created without naming keys gets the account's newest key, or under an organization, the organization's newest key. Saving a key with an SSHKey makes it that key, for teammates' rentals too. Name keys in `sshKeyRefs` rather than relying on the default.
 - **Rentals don't join your cluster as nodes.** You get machines you reach over SSH, not nodes in `kubectl get nodes`. Whether they should is open for discussion on the [roadmap](ROADMAP.md).
 - **The operator must be running to end a rental.** Deleting the cluster or uninstalling the operator leaves rentals billing. Delete GPURentals first.
 - **On-demand only.** Reserved-term rentals (prepaid commitments) are out of scope.

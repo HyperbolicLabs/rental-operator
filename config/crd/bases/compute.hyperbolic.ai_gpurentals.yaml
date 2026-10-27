@@ -177,6 +177,31 @@ spec:
                   set, only from regions that support custom ports.
                 maxLength: 63
                 type: string
+              sshKeyRefs:
+                description: |-
+                  SSHKeyRefs names SSHKeys in this namespace to authorize on the rental.
+                  The rental is not created until each one is Ready and uses the same
+                  providerConfigRef. They can change while the rental runs: added keys
+                  are attached and removed ones detached, unless the rental doesn't
+                  allow it, which Synced reports with reason SSHKeyChangeRejected. Keys
+                  the operator did not attach are left alone. Without sshKeyRefs, the
+                  API authorizes the account's most recently saved key.
+                items:
+                  description: SSHKeyReference names an SSHKey in the rental's namespace.
+                  properties:
+                    name:
+                      description: name of the SSHKey.
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                  required:
+                  - name
+                  type: object
+                maxItems: 32
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
               terminated:
                 default: false
                 description: |-
@@ -352,6 +377,15 @@ spec:
                   RentalID is the server's rental id: the handle terminate and reboot
                   take, and how this rental is found when listing.
                 type: string
+              sshKeyIds:
+                description: |-
+                  SSHKeyIDs are the ids of the saved keys the operator authorized on the
+                  rental, from spec.sshKeyRefs.
+                items:
+                  format: int64
+                  type: integer
+                type: array
+                x-kubernetes-list-type: set
               terminatedAt:
                 description: |-
                   TerminatedAt is when the rental was observed terminated, by the

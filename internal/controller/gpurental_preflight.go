@@ -66,7 +66,7 @@ func classifyCreateError(err error) (reason, msg string) {
 	case hyperbolic.HasCode(err, hyperbolic.CodeCustomPortsNotSupportedForRegion):
 		return hypv1alpha1.ReasonPortsUnsupportedInRegion, "custom ports are not supported in the selected region; use a forge region or remove spec.ports"
 	case hyperbolic.HasCode(err, hyperbolic.CodeNoPublicKey):
-		return hypv1alpha1.ReasonNoSSHKey, "the account has no SSH public key registered; add one in the Hyperbolic dashboard before renting"
+		return hypv1alpha1.ReasonNoSSHKey, "the account has no saved SSH public key; save one with an SSHKey and list it in spec.sshKeyRefs, or add one in the Hyperbolic dashboard"
 	case hyperbolic.HasCode(err, hyperbolic.CodeRegionDisabled):
 		return hypv1alpha1.ReasonRegionDisabled, "the selected region is not enabled for this account: " + err.Error()
 	case hyperbolic.HasCode(err, hyperbolic.CodeInsufficientBalance):

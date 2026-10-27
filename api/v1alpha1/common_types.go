@@ -72,18 +72,19 @@ type Credentials struct {
 	SecretRef SecretKeySelector `json:"secretRef"`
 }
 
-// DeletionPolicy decides what happens to the Hyperbolic rental when its
-// GPURental is deleted.
+// DeletionPolicy decides what happens on Hyperbolic when a GPURental or an
+// SSHKey is deleted.
 // +kubebuilder:validation:Enum=Delete;Orphan
 type DeletionPolicy string
 
 const (
-	// DeletionPolicyDelete terminates the rental before the object is
-	// removed. The object is never removed while the rental may be billing.
+	// DeletionPolicyDelete terminates a GPURental's rental, or deletes the
+	// key an SSHKey saved, before the object is removed. A GPURental is
+	// never removed while its rental may be billing.
 	DeletionPolicyDelete DeletionPolicy = "Delete"
-	// DeletionPolicyOrphan removes the object and leaves the rental running:
-	// to hand a rental to another system, or to delete an object whose
-	// credentials are gone (you then terminate the rental yourself).
+	// DeletionPolicyOrphan removes the object and leaves the rental running,
+	// or the key saved: to hand them to another system, or to delete an
+	// object whose credentials are gone (you then clean up yourself).
 	DeletionPolicyOrphan DeletionPolicy = "Orphan"
 )
 
@@ -124,10 +125,14 @@ const (
 	// FinalizerTerminate holds a GPURental until its rental is terminated.
 	FinalizerTerminate = "compute.hyperbolic.ai/terminate"
 
-	// FinalizerInUse holds a ProviderConfig while GPURentals that may still
-	// be billing use it, so credentials cannot disappear before the rentals
-	// they pay for.
+	// FinalizerInUse holds a ProviderConfig while SSHKeys, or GPURentals
+	// that may still be billing, use it, so credentials cannot disappear
+	// before the rentals they pay for and the keys they saved.
 	FinalizerInUse = "compute.hyperbolic.ai/in-use"
+
+	// FinalizerSSHKey holds an SSHKey until the key it saved is deleted from
+	// the account.
+	FinalizerSSHKey = "compute.hyperbolic.ai/ssh-key"
 
 	// AnnotationRentalID records the rental's id as soon as a create
 	// succeeds, before status is written, so the id survives a failed status
@@ -138,9 +143,14 @@ const (
 	// last applied, so a reboot is not repeated.
 	AnnotationRebootedGeneration = "compute.hyperbolic.ai/rebooted-generation"
 
-	// AnnotationCreatePending is written, with a timestamp, before a create is
-	// sent. If it is present without a rental id, the outcome of that create
-	// is unknown and the operator looks the rental up by label before it
-	// creates anything again.
+	// AnnotationCreatePending is written, with a timestamp, before a rental
+	// is created or an SSH key saved. If it is present without an id, the
+	// outcome of that request is unknown, and the operator looks the rental
+	// or key up before it sends anything again.
 	AnnotationCreatePending = "compute.hyperbolic.ai/create-pending"
+
+	// AnnotationSSHKeyID records the id of a key the operator saved, as soon
+	// as the save succeeds. Only an SSHKey that saved its key carries it, and
+	// only that key is deleted with the SSHKey.
+	AnnotationSSHKeyID = "compute.hyperbolic.ai/ssh-key-id"
 )

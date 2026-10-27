@@ -10,6 +10,7 @@ Recipes for day-to-day use. Field details are in [Custom resources](resources.md
 - [Delete the object but keep the rental running](#delete-the-object-but-keep-the-rental-running)
 - [Reboot all nodes](#reboot-all-nodes)
 - [Name it in the dashboard](#name-it-in-the-dashboard)
+- [Authorize SSH keys](#authorize-ssh-keys)
 - [Before you delete the cluster](#before-you-delete-the-cluster)
 
 ## List everything the operator manages
@@ -91,6 +92,33 @@ spec:
 ```
 
 The operator uses this label to find its rental if a create's outcome is unknown, so keep it unique within the account. The default, `<metadata.name>-<6 characters of the UID>`, always is.
+
+## Authorize SSH keys
+
+Save each person's key with an SSHKey and list the ones a rental should accept:
+
+```yaml
+apiVersion: compute.hyperbolic.ai/v1alpha1
+kind: SSHKey
+metadata:
+  name: alice
+spec:
+  providerConfigRef: { name: default }
+  publicKey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGV4YW1wbGUta2V5LXJlcGxhY2Utd2l0aC15b3VycyEh alice@laptop
+---
+apiVersion: compute.hyperbolic.ai/v1alpha1
+kind: GPURental
+metadata:
+  name: train-run-42
+spec:
+  providerConfigRef: { name: default }
+  gpuType: h100
+  gpuCount: 8
+  sshKeyRefs:
+    - name: alice
+```
+
+Edit `sshKeyRefs` on a running rental to give or take away access without a restart. The operator attaches added keys and detaches removed ones, and leaves alone any key it did not attach, such as the one the account authorized by default. Some rentals don't allow key changes. The API refuses, the rental keeps the keys it has, and `Synced` says `SSHKeyChangeRejected`.
 
 ## Before you delete the cluster
 

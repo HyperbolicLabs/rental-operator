@@ -63,6 +63,7 @@ func (r *ProviderConfigReconciler) validate() error {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=sshkeys,verbs=get;list;watch
 
 // Reconcile validates the credential and reports balance/readiness on status.
 func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -81,7 +82,7 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 // SetupWithManager sets up the controller with the Manager. It also watches
 // referenced Secrets, so a key rotation re-validates the config promptly, and
-// GPURentals, so the in-use count and deletion follow them.
+// GPURentals and SSHKeys, so the in-use count and deletion follow them.
 func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := r.validate(); err != nil {
 		return err
@@ -89,8 +90,10 @@ func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypv1alpha1.ProviderConfig{}, builder.WithPredicates(configChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.providerConfigsForSecret)).
-		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOfRental(false)),
+		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOf(false)),
 			builder.WithPredicates(rentalUsageChanged)).
+		Watches(&hypv1alpha1.SSHKey{}, handler.EnqueueRequestsFromMapFunc(configOf(false)),
+			builder.WithPredicates(sshKeyUsageChanged)).
 		Named("providerconfig").
 		Complete(r)
 }

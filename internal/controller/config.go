@@ -53,7 +53,8 @@ type configView struct {
 
 // reconcileConfig validates a config's credentials and reports the in-use
 // count, and the account's balance and active rentals as the API reports them.
-// It holds the config with the in-use finalizer while GPURentals use it.
+// It holds the config with the in-use finalizer while GPURentals or SSHKeys
+// use it.
 func reconcileConfig(ctx context.Context, c client.Client, creds account.Resolver, newClient account.ClientFactory, v configView) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -144,8 +145,8 @@ func finishConfigNotReady(ctx context.Context, c client.Client, v configView, re
 	return ctrl.Result{RequeueAfter: providerConfigRetry}, nil
 }
 
-// reconcileConfigDelete removes the in-use finalizer once no GPURental that
-// may still be billing uses this config.
+// reconcileConfigDelete removes the in-use finalizer once no SSHKey, and no
+// GPURental that may still be billing, uses this config.
 func reconcileConfigDelete(ctx context.Context, c client.Client, v configView) (ctrl.Result, error) {
 	if !controllerutil.ContainsFinalizer(v.obj, hypv1alpha1.FinalizerInUse) {
 		return ctrl.Result{}, nil
@@ -154,13 +155,17 @@ func reconcileConfigDelete(ctx context.Context, c client.Client, v configView) (
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	if len(users) > 0 {
-		shown := rentalNames(users, v.ref.IsCluster())
+	keys, err := sshKeysOnConfig(ctx, c, v.obj.GetNamespace(), v.ref)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if n := len(users) + len(keys); n > 0 {
+		shown := userNames(users, keys, v.ref.IsCluster())
 		if len(shown) > 5 {
-			shown = append(shown[:5:5], fmt.Sprintf("and %d more", len(users)-5))
+			shown = append(shown[:5:5], fmt.Sprintf("and %d more", n-5))
 		}
-		msg := fmt.Sprintf("Deletion waits until the %d GPURental(s) using this config are gone: %s",
-			len(users), strings.Join(shown, ", "))
+		msg := fmt.Sprintf("Deletion waits until the %d object(s) using this config are gone: %s",
+			n, strings.Join(shown, ", "))
 		v.status.ManagedRentals = int32(len(users))
 		apimeta.SetStatusCondition(&v.status.Conditions, metav1.Condition{
 			Type: hypv1alpha1.ConditionReady, Status: metav1.ConditionFalse,
@@ -169,7 +174,8 @@ func reconcileConfigDelete(ctx context.Context, c client.Client, v configView) (
 		if err := c.Status().Update(ctx, v.obj); err != nil {
 			return ctrl.Result{}, err
 		}
-		// GPURental changes requeue this config. The interval is a backstop.
+		// GPURental and SSHKey changes requeue this config. The interval is a
+		// backstop.
 		return ctrl.Result{RequeueAfter: providerConfigRetry}, nil
 	}
 	controllerutil.RemoveFinalizer(v.obj, hypv1alpha1.FinalizerInUse)
@@ -200,15 +206,41 @@ func rentalsOnConfig(ctx context.Context, c client.Client, namespace string, ref
 	return out, nil
 }
 
-// rentalNames names rentals for people: namespace/name for a cluster config.
-func rentalNames(rentals []hypv1alpha1.GPURental, cluster bool) []string {
-	names := make([]string, 0, len(rentals))
-	for _, gr := range rentals {
-		if cluster {
-			names = append(names, gr.Namespace+"/"+gr.Name)
-		} else {
-			names = append(names, gr.Name)
+// sshKeysOnConfig returns the SSHKeys that use the config ref (in
+// namespace, unless it is a cluster config).
+func sshKeysOnConfig(ctx context.Context, c client.Client, namespace string, ref hypv1alpha1.ProviderConfigReference) ([]hypv1alpha1.SSHKey, error) {
+	var list hypv1alpha1.SSHKeyList
+	var opts []client.ListOption
+	if !ref.IsCluster() {
+		opts = append(opts, client.InNamespace(namespace))
+	}
+	if err := c.List(ctx, &list, opts...); err != nil {
+		return nil, err
+	}
+	var out []hypv1alpha1.SSHKey
+	for _, key := range list.Items {
+		if refersTo(key.Spec.ProviderConfigRef, ref) {
+			out = append(out, key)
 		}
+	}
+	return out, nil
+}
+
+// userNames names a config's users for people, kind first and with the
+// namespace for a cluster config, sorted.
+func userNames(rentals []hypv1alpha1.GPURental, keys []hypv1alpha1.SSHKey, cluster bool) []string {
+	names := make([]string, 0, len(rentals)+len(keys))
+	name := func(kind string, obj client.Object) string {
+		if cluster {
+			return kind + " " + obj.GetNamespace() + "/" + obj.GetName()
+		}
+		return kind + " " + obj.GetName()
+	}
+	for i := range rentals {
+		names = append(names, name("GPURental", &rentals[i]))
+	}
+	for i := range keys {
+		names = append(names, name("SSHKey", &keys[i]))
 	}
 	slices.Sort(names)
 	return names
@@ -219,17 +251,25 @@ func refersTo(ref, config hypv1alpha1.ProviderConfigReference) bool {
 	return ref.Name == config.Name && ref.IsCluster() == config.IsCluster()
 }
 
-// configOfRental maps a GPURental to the config it uses, when that config is
-// of the kind the calling controller reconciles.
-func configOfRental(cluster bool) handler.MapFunc {
+// configOf maps a GPURental or SSHKey to the config it uses, when that
+// config is of the kind the calling controller reconciles.
+func configOf(cluster bool) handler.MapFunc {
 	return func(_ context.Context, obj client.Object) []reconcile.Request {
-		gr, ok := obj.(*hypv1alpha1.GPURental)
-		if !ok || gr.Spec.ProviderConfigRef.Name == "" || gr.Spec.ProviderConfigRef.IsCluster() != cluster {
+		var ref hypv1alpha1.ProviderConfigReference
+		switch o := obj.(type) {
+		case *hypv1alpha1.GPURental:
+			ref = o.Spec.ProviderConfigRef
+		case *hypv1alpha1.SSHKey:
+			ref = o.Spec.ProviderConfigRef
+		default:
 			return nil
 		}
-		key := client.ObjectKey{Name: gr.Spec.ProviderConfigRef.Name}
+		if ref.Name == "" || ref.IsCluster() != cluster {
+			return nil
+		}
+		key := client.ObjectKey{Name: ref.Name}
 		if !cluster {
-			key.Namespace = gr.Namespace
+			key.Namespace = obj.GetNamespace()
 		}
 		return []reconcile.Request{{NamespacedName: key}}
 	}
@@ -244,6 +284,14 @@ var configChanged = predicate.Funcs{
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() ||
 			e.ObjectOld.GetDeletionTimestamp().IsZero() != e.ObjectNew.GetDeletionTimestamp().IsZero()
+	},
+}
+
+// sshKeyUsageChanged passes SSHKey events that change whether it uses its
+// config: created, deleted or being deleted.
+var sshKeyUsageChanged = predicate.Funcs{
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		return e.ObjectOld.GetDeletionTimestamp().IsZero() != e.ObjectNew.GetDeletionTimestamp().IsZero()
 	},
 }
 

@@ -69,7 +69,7 @@ flowchart LR
    - **Rewrite every object**, on any cluster. Reading and writing back each object unchanged makes the API server store it in the current storage version. A conflict error means the operator updated that object in between, so run the command again.
 
      ```console
-     for r in gpurentals providerconfigs gpuavailabilities; do
+     for r in gpurentals providerconfigs gpuavailabilities sshkeys; do
        kubectl get "$r.compute.hyperbolic.ai" -A -o json | kubectl replace -f -
      done
      kubectl get clusterproviderconfigs.compute.hyperbolic.ai -o json | kubectl replace -f -
@@ -78,7 +78,7 @@ flowchart LR
      Then record that only the new version is stored, here `v1beta1`:
 
      ```console
-     for r in gpurentals providerconfigs clusterproviderconfigs gpuavailabilities; do
+     for r in gpurentals providerconfigs clusterproviderconfigs gpuavailabilities sshkeys; do
        kubectl patch crd "$r.compute.hyperbolic.ai" --subresource=status --type=merge \
          -p '{"status":{"storedVersions":["v1beta1"]}}'
      done

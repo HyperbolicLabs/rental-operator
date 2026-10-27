@@ -18,7 +18,7 @@ limitations under the License.
 // polls and terminates rentals, which is everything that spends money.
 // ProviderConfig and ClusterProviderConfig check an account's key and show
 // its balance and active rentals. GPUAvailability shows what an account can
-// rent.
+// rent. SSHKey saves the SSH keys that rentals authorize.
 //
 // Reconcilers get every dependency from the manager's setup and check the
 // required ones when they are registered, so a wiring mistake fails at

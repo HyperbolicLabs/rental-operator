@@ -18,33 +18,38 @@ flowchart LR
     config["ProviderConfig or<br/>ClusterProviderConfig<br/>+ labeled Secret"]
     rental["GPURental"]
     avail["GPUAvailability"]
+    sshkey["SSHKey"]
   end
   subgraph operator["rental-operator"]
     direction TB
     cfgctl["Config controllers<br/>key check, balance"]
     rentctl["GPURental controller<br/>preflight, create, poll, terminate"]
     availctl["GPUAvailability controller"]
+    keyctl["SSHKey controller<br/>save, delete"]
     cache[("Per-account cache<br/>rental list, catalog")]
   end
   api["Hyperbolic API"]
   config <--> cfgctl
   rental <--> rentctl
   avail <--> availctl
+  sshkey <--> keyctl
   rentctl -- "reads" --> cache
   availctl -- "reads" --> cache
   cfgctl -- "balance" --> api
-  rentctl -- "create, terminate" --> api
+  rentctl -- "create, terminate,<br/>attach keys" --> api
+  keyctl -- "save, delete keys" --> api
   cache -- "one call per account<br/>per interval" --> api
 ```
 
-The manager runs four controllers:
+The manager runs five controllers:
 
 | Controller | Watches | Does |
 |---|---|---|
-| ProviderConfig | ProviderConfigs, labeled Secrets, GPURentals | Checks the API key, shows the account's balance and active rental summary as the API reports them, and holds the `in-use` finalizer while rentals still need the key. |
-| ClusterProviderConfig | ClusterProviderConfigs, labeled Secrets in the operator's namespace, GPURentals | The same for a cluster-scoped config, plus `allowedNamespaces`. |
-| GPURental | GPURentals | Preflight, create, poll, reboot, terminate. Everything that spends money. |
+| ProviderConfig | ProviderConfigs, labeled Secrets, GPURentals, SSHKeys | Checks the API key, shows the account's balance and active rental summary as the API reports them, and holds the `in-use` finalizer while rentals or saved keys still need the key. |
+| ClusterProviderConfig | ClusterProviderConfigs, labeled Secrets in the operator's namespace, GPURentals, SSHKeys | The same for a cluster-scoped config, plus `allowedNamespaces`. |
+| GPURental | GPURentals, SSHKeys | Preflight, create, poll, reboot, terminate, and attaching and detaching the keys in `sshKeyRefs`. Everything that spends money. |
 | GPUAvailability | GPUAvailabilities | Filters the account's catalog into status. |
+| SSHKey | SSHKeys | Saves the key on the account, or adopts the account's copy, and deletes it with the object if it saved it. |
 
 Each controller acts on what it observes on the object and the API, not on the event that woke it, so a missed or repeated event never changes the outcome.
 
@@ -160,6 +165,8 @@ The Hyperbolic API has no push notifications, so status is poll-driven.
 | Rental status | 10s while any rental on the account is provisioning, 60s otherwise | One list of rentals per account per interval, whatever the number of GPURentals |
 | Catalog (rental options) | `--catalog-refresh-interval`, default 5m | One query per account per interval, for every GPUAvailability and preflight |
 | Balance and active rental summary | Every 10 minutes, and when a GPURental using the config is created or ends | One read of each per config |
+| Saved SSH keys | 10m, to check each saved key is still on the account | One list per SSHKey |
+| A rental's SSH keys | Only when `sshKeyRefs` changes | One list per GPURental, then one call per key attached or detached |
 
 A list that was in flight while a rental was created or terminated is discarded, and a rental missing from a cached list is re-checked with a fresh read before it is marked as ended. A failed poll never marks a running rental as gone: it sets `Synced=False` and retries in 30s.
 

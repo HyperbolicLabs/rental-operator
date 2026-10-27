@@ -116,6 +116,27 @@ type GPURentalSpec struct {
 	// +kubebuilder:validation:Minimum=1
 	// +optional
 	MaxPriceCentsPerHour *int64 `json:"maxPriceCentsPerHour,omitempty"`
+
+	// SSHKeyRefs names SSHKeys in this namespace to authorize on the rental.
+	// The rental is not created until each one is Ready and uses the same
+	// providerConfigRef. They can change while the rental runs: added keys
+	// are attached and removed ones detached, unless the rental doesn't
+	// allow it, which Synced reports with reason SSHKeyChangeRejected. Keys
+	// the operator did not attach are left alone. Without sshKeyRefs, the
+	// API authorizes the account's most recently saved key.
+	// +kubebuilder:validation:MaxItems=32
+	// +listType=map
+	// +listMapKey=name
+	// +optional
+	SSHKeyRefs []SSHKeyReference `json:"sshKeyRefs,omitempty"`
+}
+
+// SSHKeyReference names an SSHKey in the rental's namespace.
+type SSHKeyReference struct {
+	// name of the SSHKey.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	Name string `json:"name"`
 }
 
 // InstanceStatus is the per-node view of a (possibly multi-node) rental.
@@ -171,6 +192,15 @@ const (
 	ReasonRegionDisabled           = "RegionDisabled"
 	ReasonPortsUnsupportedInRegion = "PortsUnsupportedInRegion"
 	ReasonNoSSHKey                 = "NoSSHKey"
+	// ReasonSSHKeyNotReady means an SSHKey in spec.sshKeyRefs does not
+	// exist, is not saved yet, is being deleted or uses another config. On a
+	// running rental it is reported on Synced, and the keys are left as they
+	// are.
+	ReasonSSHKeyNotReady = "SSHKeyNotReady"
+	// ReasonSSHKeyChangeRejected is reported on Synced when the API refuses
+	// to attach or detach a key on a running rental. Some rentals don't
+	// allow it. The rental keeps the keys it has.
+	ReasonSSHKeyChangeRejected = "SSHKeyChangeRejected"
 	// ReasonNamespaceNotAllowed means the ClusterProviderConfig does not allow
 	// this namespace (its allowedNamespaces selector does not match).
 	ReasonNamespaceNotAllowed = "NamespaceNotAllowed"
@@ -224,6 +254,12 @@ type GPURentalStatus struct {
 	// Instances is the per-node SSH/IP/phase view (populated once Running).
 	// +optional
 	Instances []InstanceStatus `json:"instances,omitempty"`
+
+	// SSHKeyIDs are the ids of the saved keys the operator authorized on the
+	// rental, from spec.sshKeyRefs.
+	// +listType=set
+	// +optional
+	SSHKeyIDs []int64 `json:"sshKeyIds,omitempty"`
 
 	// Conditions are Ready (is the rental running, the reason says why not)
 	// and Synced (could the last reconcile reach the Hyperbolic API).

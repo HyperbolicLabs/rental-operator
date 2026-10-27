@@ -215,13 +215,16 @@ func main() {
 	// User-Agent, so adoption can be measured server-side without client
 	// telemetry, and goes through operatorMetrics' transport.
 	newClient := account.NewClientFactory("rental-operator/"+version.Version, operatorMetrics.Transport(nil))
+	// The last API key of each config, so rentals can still be terminated,
+	// and saved SSH keys deleted, after their Secret is gone.
+	credentials := account.NewCredentialsMemory()
 
 	if err := (&controller.GPURentalReconciler{
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
 		RentalOptions:            rentalOptions,
 		NewClient:                newClient,
-		Credentials:              account.NewCredentialsMemory(),
+		Credentials:              credentials,
 		Rentals:                  rentals,
 		Clock:                    clock.RealClock{},
 		Metrics:                  operatorMetrics,
@@ -261,6 +264,19 @@ func main() {
 		ClusterResourceNamespace: clusterResourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPUAvailability")
+		os.Exit(1)
+	}
+	if err := (&controller.SSHKeyReconciler{
+		Client:                   mgr.GetClient(),
+		Scheme:                   mgr.GetScheme(),
+		NewClient:                newClient,
+		Credentials:              credentials,
+		Clock:                    clock.RealClock{},
+		Recorder:                 mgr.GetEventRecorderFor("sshkey-controller"),
+		APIReader:                mgr.GetAPIReader(),
+		ClusterResourceNamespace: clusterResourceNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SSHKey")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
