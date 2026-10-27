@@ -160,6 +160,10 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
    $ kubectl delete gpurental train-run-42
    ```
 
+   The object stays (with phase `Terminating`) until Hyperbolic confirms the rental is gone, so you are never left paying for GPUs with nothing in the cluster pointing at them.
+
+> **Before you delete the cluster:** delete your GPURentals first. `kind delete cluster` (or losing a cluster any other way) removes the operator too, and nothing is left to terminate the rentals, which keep billing until you terminate them in the [dashboard](https://app.hyperbolic.ai).
+
 ## Custom resources
 
 ### ProviderConfig
@@ -186,6 +190,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | `ports` | []int | Ports to open on the instance IP (forge regions only, at most 20, unique, 1-65535). |
 | `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. Can be changed at any time. |
 | `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. This is one-way and cannot be unset. Create a new GPURental to rent again. |
+| `deletionPolicy` | `Delete` \| `Orphan` | What deleting the object does. `Delete` (default) terminates the rental first and keeps the object until it is confirmed gone. `Orphan` removes the object and leaves the rental running. |
 | `rebootGeneration` | int | Increase to reboot all nodes. |
 
 `providerConfigRef`, `gpuType`, `gpuCount`, `region`, `networkType`, `ports` and `displayName` cannot change after the GPURental is created. The API server rejects the edit. Rentals can't be resized or moved to another account in place, so delete the object and create a new one (a `Blocked` rental never rented anything, so recreating it costs nothing).
@@ -260,6 +265,13 @@ They open directly on the instance's public IP at the same numbers (`status.open
 spec:
   maxPriceCentsPerHour: 3000   # refuse to create above $30/hr
 ```
+
+**Delete the object but keep the rental running** (to hand it to another system, or when the API key is gone and the operator cannot terminate it):
+```yaml
+spec:
+  deletionPolicy: Orphan
+```
+Without it, a GPURental whose credentials can't be read stays in `Terminating` with a `TerminationBlocked` event that explains how to proceed: restore the Secret, or set `deletionPolicy: Orphan` and terminate the rental in the dashboard. If the Secret disappears while the operator is running (as in `kubectl delete namespace`), the operator still terminates with the last key it read for that ProviderConfig.
 
 **Terminate but keep the object as a record** (one-way; the CR becomes read-only):
 ```yaml
@@ -355,7 +367,7 @@ The tag is the single source of truth for the version — the committed `Chart.y
 
 - Your API key lives only in a `Secret` you control. The operator reads it at reconcile, sends it solely to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status.
 - The operator acts entirely as your account — it's an API client, so its blast radius is exactly what your API key can already do.
-- It needs `get`/`list`/`watch` on `Secrets` and full access to its own CRDs (see the chart's RBAC). Its only external egress is `api.hyperbolic.ai:443`.
+- It needs `get`/`list`/`watch` on `Secrets`, full access to its own CRDs, and `create`/`patch` on `Events` (see the chart's RBAC). Its only external egress is `api.hyperbolic.ai:443`.
 - Every request carries `User-Agent: rental-operator/<version> hyperbolic-go/<version>`. That is the only usage signal. There is no other telemetry.
 - Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 

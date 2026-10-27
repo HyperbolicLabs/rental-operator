@@ -54,6 +54,21 @@ type Credentials struct {
 	SecretRef SecretKeySelector `json:"secretRef"`
 }
 
+// DeletionPolicy decides what happens to the Hyperbolic rental when its
+// GPURental is deleted.
+// +kubebuilder:validation:Enum=Delete;Orphan
+type DeletionPolicy string
+
+const (
+	// DeletionPolicyDelete terminates the rental before the object is
+	// removed. The object is never removed while the rental may be billing.
+	DeletionPolicyDelete DeletionPolicy = "Delete"
+	// DeletionPolicyOrphan removes the object and leaves the rental running:
+	// to hand a rental to another system, or to delete an object whose
+	// credentials are gone (you then terminate the rental yourself).
+	DeletionPolicyOrphan DeletionPolicy = "Orphan"
+)
+
 // Condition types. Conditions are the contract for automation. Phase fields
 // are for display. Every kind reports Ready and Synced.
 const (
