@@ -107,4 +107,5 @@ var _ = DescribeTable("GPURental updates that requeue its ProviderConfig",
 	Entry("a routine status update", func(gr *hypv1alpha1.GPURental) { gr.Status.Phase = hypv1alpha1.PhaseRunning }, false),
 	Entry("deletion starting", func(gr *hypv1alpha1.GPURental) { now := metav1.Now(); gr.DeletionTimestamp = &now }, true),
 	Entry("becoming a terminated record", func(gr *hypv1alpha1.GPURental) { now := metav1.Now(); gr.Status.TerminatedAt = &now }, true),
+	Entry("its rental being created", func(gr *hypv1alpha1.GPURental) { gr.Status.RentalID = "rnt_7" }, true),
 )

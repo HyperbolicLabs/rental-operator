@@ -514,6 +514,16 @@ func (in *ProviderConfigStatus) DeepCopyInto(out *ProviderConfigStatus) {
 		*out = new(int64)
 		**out = **in
 	}
+	if in.ActiveRentals != nil {
+		in, out := &in.ActiveRentals, &out.ActiveRentals
+		*out = new(int32)
+		**out = **in
+	}
+	if in.CostCentsPerHour != nil {
+		in, out := &in.CostCentsPerHour, &out.CostCentsPerHour
+		*out = new(int64)
+		**out = **in
+	}
 	if in.LastChecked != nil {
 		in, out := &in.LastChecked, &out.LastChecked
 		*out = (*in).DeepCopy()
