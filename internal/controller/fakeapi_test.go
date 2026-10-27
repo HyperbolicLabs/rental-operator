@@ -52,7 +52,10 @@ func newFakeAccount(ctx context.Context) *fakeAccount {
 	Expect(k8sClient.Create(ctx, ns)).To(Succeed())
 
 	secret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: "hyperbolic-key", Namespace: ns.Name},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "hyperbolic-key", Namespace: ns.Name,
+			Labels: map[string]string{hypv1alpha1.LabelCredentials: "true"},
+		},
 		StringData: map[string]string{"api-key": api.APIKey},
 	}
 	Expect(k8sClient.Create(ctx, secret)).To(Succeed())

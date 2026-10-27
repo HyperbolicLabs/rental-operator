@@ -48,6 +48,9 @@ type GPUAvailabilityReconciler struct {
 	// NewClient builds Hyperbolic API clients. Optional, and nil uses
 	// NewClientFactory with the operator's version.
 	NewClient ClientFactory
+	// APIReader reads around the cache, to explain a Secret the cache does
+	// not hold (it is not labeled). Optional.
+	APIReader client.Reader
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
@@ -62,7 +65,7 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	creds, err := resolveCreds(ctx, r.Client, ga.Namespace, ga.Spec.ProviderConfigRef)
+	creds, err := resolveCreds(ctx, r.Client, r.APIReader, ga.Namespace, ga.Spec.ProviderConfigRef)
 	if err != nil {
 		r.setReady(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
 		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())

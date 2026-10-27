@@ -106,7 +106,10 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
    ```console
    kubectl create secret generic hyperbolic-key \
      --from-literal=api-key=sk_live_xxxxxxxxxxxxxxxxxxxx
+   kubectl label secret hyperbolic-key compute.hyperbolic.ai/credentials=true
    ```
+
+   The operator only reads Secrets with that label, so it never holds the rest of your cluster's Secrets in memory.
 
 2. **Create a ProviderConfig:**
 
@@ -171,7 +174,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | Field | Type | Description |
 |---|---|---|
 | `spec.credentials.source` | string | Where the API key comes from. Only `Secret` (the default) today. |
-| `spec.credentials.secretRef.name` | string (required) | Secret in this namespace holding the API key. |
+| `spec.credentials.secretRef.name` | string (required) | Secret in this namespace holding the API key. It must be labeled `compute.hyperbolic.ai/credentials=true`. Otherwise the ProviderConfig reports `SecretNotLabeled` with the command to fix it. |
 | `spec.credentials.secretRef.key` | string | Key within the Secret. Default `api-key`. |
 | `spec.endpoint` | string | API base URL. Default `https://api.hyperbolic.ai`. Must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1` or `::1` test servers. |
 | `status.balanceCents` | int | Account balance (cents) at last check. |
@@ -369,6 +372,7 @@ The tag is the single source of truth for the version — the committed `Chart.y
 - Your API key lives only in a `Secret` you control. The operator reads it at reconcile, sends it solely to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status.
 - The operator acts entirely as your account — it's an API client, so its blast radius is exactly what your API key can already do.
 - It needs `get`/`list`/`watch` on `Secrets`, full access to its own CRDs, and `create`/`patch` on `Events` (see the chart's RBAC). Its only external egress is `api.hyperbolic.ai:443`.
+- It only reads and caches Secrets labeled `compute.hyperbolic.ai/credentials=true`. Kubernetes RBAC cannot grant access by label, so in the default cluster-wide install its role can still read any Secret. The label keeps everything else out of its memory and its logic.
 - Every request carries `User-Agent: rental-operator/<version> hyperbolic-go/<version>`. That is the only usage signal. There is no other telemetry.
 - Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 
