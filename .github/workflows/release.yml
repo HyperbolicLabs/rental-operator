@@ -54,6 +54,11 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           provenance: false
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+          # hyperbolic-go is private for now. The Dockerfile reads this secret only to download modules.
+          secrets: |
+            gh_token=${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
             ${{ steps.meta.outputs.image }}:latest

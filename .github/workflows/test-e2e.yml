@@ -8,6 +8,10 @@ jobs:
   test-e2e:
     name: Run on Ubuntu
     runs-on: ubuntu-latest
+    env:
+      # hyperbolic-go is private for now. See CONTRIBUTING.md.
+      GOPRIVATE: github.com/HyperbolicLabs/*
+      HYPERBOLIC_GO_TOKEN: ${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -16,6 +20,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Allow access to private HyperbolicLabs modules
+        env:
+          TOKEN: ${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
+        run: git config --global url."https://x-access-token:${TOKEN}@github.com/HyperbolicLabs/".insteadOf "https://github.com/HyperbolicLabs/"
 
       - name: Install the latest version of kind
         run: |

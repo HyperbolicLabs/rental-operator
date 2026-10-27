@@ -31,8 +31,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 const (
@@ -46,6 +46,9 @@ const (
 type ProviderConfigReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	// NewClient builds Hyperbolic API clients. Optional, and nil uses
+	// NewClientFactory with the operator's version.
+	NewClient ClientFactory
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -72,10 +75,20 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		return ctrl.Result{RequeueAfter: providerConfigRetry}, nil
 	}
 
-	bal, err := creds.newClient().GetBalance(ctx)
+	hc, err := creds.newClient(r.NewClient)
+	if err != nil {
+		log.Info("cannot build an API client", "error", err.Error())
+		r.setNotReady(&pc, "InvalidEndpoint", err.Error())
+		if statusErr := r.Status().Update(ctx, &pc); statusErr != nil {
+			return ctrl.Result{}, statusErr
+		}
+		return ctrl.Result{RequeueAfter: providerConfigRetry}, nil
+	}
+
+	bal, err := getBalance(ctx, hc)
 	if err != nil {
 		reason := reasonAPIError
-		if code := hyperbolic.StatusCodeOf(err); code == 401 || code == 403 {
+		if hyperbolic.IsUnauthorized(err) {
 			reason = "Unauthenticated"
 		}
 		log.Info("credential validation failed", "reason", reason, "error", err.Error())
