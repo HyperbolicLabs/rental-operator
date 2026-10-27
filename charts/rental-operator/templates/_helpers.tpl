@@ -46,7 +46,7 @@ watched namespace.
   resources: [secrets]
   verbs: [get, list, watch]
 # Events on GPURentals and SSHKeys (progress and how to get unstuck).
-- apiGroups: [""]
+- apiGroups: [events.k8s.io]
   resources: [events]
   verbs: [create, patch]
 - apiGroups: [compute.hyperbolic.ai]
