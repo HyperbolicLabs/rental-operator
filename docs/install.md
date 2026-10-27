@@ -9,7 +9,7 @@
 
 ## Prerequisites
 
-- A Kubernetes cluster (v1.25+) and `kubectl`.
+- Kubernetes 1.35, 1.36 or 1.37, and `kubectl`. These are the versions CI tests. See [SUPPORT.md](../SUPPORT.md).
 - [Helm](https://helm.sh) 3.x.
 - A **Hyperbolic API key** (`sk_live_...`) from the [dashboard](https://app.hyperbolic.ai).
 - An **SSH public key registered on your Hyperbolic account** (in the dashboard) if you want to log into the rented machines. Rentals get your account's registered key. The operator does not manage SSH keys. If the account has no key, rentals stay `Blocked` with `NoSSHKey` instead of provisioning a machine you can't reach.

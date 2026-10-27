@@ -41,7 +41,7 @@ It is built to never spend money you didn't ask for: a create is never retried b
 
 ## Project status
 
-rental-operator is at v0.1, its first public release. The API is `compute.hyperbolic.ai/v1alpha1`, so fields may still change in a minor release, and the release notes call out each change with migration steps.
+rental-operator is at v0.1, its first public release. The API is `compute.hyperbolic.ai/v1alpha1`, so fields may still change in a minor release, and the release notes call out each change with migration steps. [SUPPORT.md](SUPPORT.md) lists the supported releases and Kubernetes versions.
 
 ## How it works
 
@@ -77,7 +77,7 @@ Four custom resources, all in the `hyperbolic` category (`kubectl get hyperbolic
 
 ## Quickstart
 
-You need a Kubernetes cluster, [Helm](https://helm.sh) 3, a Hyperbolic API key from the [dashboard](https://app.hyperbolic.ai), and an SSH public key registered on your Hyperbolic account. See [Install](docs/install.md) for the namespaced install, upgrades and uninstalling.
+You need Kubernetes 1.35 to 1.37, [Helm](https://helm.sh) 3, a Hyperbolic API key from the [dashboard](https://app.hyperbolic.ai), and an SSH public key registered on your Hyperbolic account. See [Install](docs/install.md) for the namespaced install, upgrades and uninstalling.
 
 ```console
 helm install rental-operator \
@@ -172,6 +172,7 @@ helm install rental-operator \
 | [Custom resources](docs/resources.md) | Every field, condition and reason. |
 | [Common operations](docs/operations.md) | Regions, ports, terminating, orphaning, rebooting. |
 | [Development](docs/development.md) | Running locally and cutting a release. |
+| [Support](SUPPORT.md) | Getting help, supported releases and Kubernetes versions. |
 | [Releases](https://github.com/HyperbolicLabs/rental-operator/releases) and [roadmap](ROADMAP.md) | What changed and what comes next. |
 
 ## Limitations

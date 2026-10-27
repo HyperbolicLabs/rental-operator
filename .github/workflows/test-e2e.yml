@@ -4,10 +4,26 @@ on:
   push:
   pull_request:
 
+env:
+  KIND_VERSION: v0.33.0
+  KIND_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d # kind-linux-amd64
+
 jobs:
   test-e2e:
-    name: Run on Ubuntu
+    name: Kubernetes ${{ matrix.kubernetes }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The supported versions in SUPPORT.md. Node images are the ones the
+      # pinned kind release was built and tested with.
+      matrix:
+        include:
+          - kubernetes: "1.35"
+            node-image: kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+          - kubernetes: "1.36"
+            node-image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+          - kubernetes: "1.37"
+            node-image: kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
     env:
       # hyperbolic-go is private for now. See CONTRIBUTING.md.
       GOPRIVATE: github.com/HyperbolicLabs/*
@@ -19,22 +35,28 @@ jobs:
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          # renovate: datasource=github-releases depName=helm/helm
+          version: v3.15.4
 
       - name: Allow access to private HyperbolicLabs modules
         env:
           TOKEN: ${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
         run: git config --global url."https://x-access-token:${TOKEN}@github.com/HyperbolicLabs/".insteadOf "https://github.com/HyperbolicLabs/"
 
-      - name: Install the latest version of kind
+      - name: Install kind ${{ env.KIND_VERSION }}
         run: |
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
+          curl -fsSLo ./kind "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_SHA256}  ./kind" | sha256sum --check --strict
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
-
-      - name: Verify kind installation
-        run: kind version
+          kind version
 
       - name: Running Test e2e
+        env:
+          KIND_NODE_IMAGE: ${{ matrix.node-image }}
         run: |
           go mod tidy
           make test-e2e

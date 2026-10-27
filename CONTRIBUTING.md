@@ -10,7 +10,7 @@ Thanks for your interest. Bug reports, fixes, docs and features are all welcome.
 
 ## Development
 
-You need Go (the version in `go.mod`), Docker, and for end-to-end tests [kind](https://kind.sigs.k8s.io/). The Makefile downloads the other tools (controller-gen, kustomize, golangci-lint, envtest) into `./bin`.
+You need Go (the version in `go.mod`), Docker, and for end-to-end tests [kind](https://kind.sigs.k8s.io/) and [Helm](https://helm.sh). The Makefile downloads the other tools (controller-gen, kustomize, golangci-lint, envtest) into `./bin`.
 
 The operator talks to Hyperbolic through [`hyperbolic-go`](https://github.com/HyperbolicLabs/hyperbolic-go), which is private for now. Until it is public you need read access to it, and:
 
@@ -30,6 +30,12 @@ make test-e2e           # end-to-end tests on a throwaway kind cluster
 ```
 
 After changing anything under `api/` or a `+kubebuilder` marker, run `make manifests generate` and commit the result, including the CRD copies under `charts/rental-operator/crds/`.
+
+`make test-e2e` uses kind's default Kubernetes version. CI runs it on every version in [SUPPORT.md](SUPPORT.md). To reproduce one, pass its node image from [`test-e2e.yml`](.github/workflows/test-e2e.yml):
+
+```console
+make test-e2e KIND_NODE_IMAGE=kindest/node:v1.35.8@sha256:07b2536e30b803ed61d1677a79df6115f798ce64c80f9e22f6ed45afd09323c0
+```
 
 Tests must never call the real Hyperbolic API. Controller tests run against the in-memory fake from `hyperbolic-go/hyperbolictest`, which can also inject failures (rate limits, 5xx, timeouts, failures after the server applied a request). See `internal/controller/fakeapi_test.go`.
 
