@@ -87,7 +87,7 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	bal, err := getBalance(ctx, hc)
 	if err != nil {
-		reason := reasonAPIError
+		reason := hypv1alpha1.ReasonAPIError
 		if hyperbolic.IsUnauthorized(err) {
 			reason = "Unauthenticated"
 		}
@@ -112,6 +112,11 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		Type: hypv1alpha1.ConditionReady, Status: metav1.ConditionTrue,
 		Reason: "Ready", Message: "Credential valid", ObservedGeneration: pc.Generation,
 	})
+	apimeta.SetStatusCondition(&pc.Status.Conditions, metav1.Condition{
+		Type: hypv1alpha1.ConditionSynced, Status: metav1.ConditionTrue,
+		Reason: hypv1alpha1.ReasonReconcileSuccess, Message: "Last reconcile reached the Hyperbolic API",
+		ObservedGeneration: pc.Generation,
+	})
 	if err := r.Status().Update(ctx, &pc); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -125,6 +130,10 @@ func (r *ProviderConfigReconciler) setNotReady(pc *hypv1alpha1.ProviderConfig, r
 	})
 	apimeta.SetStatusCondition(&pc.Status.Conditions, metav1.Condition{
 		Type: hypv1alpha1.ConditionReady, Status: metav1.ConditionFalse,
+		Reason: reason, Message: msg, ObservedGeneration: pc.Generation,
+	})
+	apimeta.SetStatusCondition(&pc.Status.Conditions, metav1.Condition{
+		Type: hypv1alpha1.ConditionSynced, Status: metav1.ConditionFalse,
 		Reason: reason, Message: msg, ObservedGeneration: pc.Generation,
 	})
 	pc.Status.ObservedGeneration = pc.Generation

@@ -45,28 +45,27 @@ const (
 	// spec change, so a gentle 5-minute cadence avoids hammering the API.
 	blockedRetry = 5 * time.Minute
 	apiRetry     = 30 * time.Second
-
-	// reasonAPIError is the condition reason for a transient API failure.
-	reasonAPIError = "APIError"
-
-	// phaseProvisioning is the CR phase shown while the API status is Pending
-	// (clearer than surfacing the raw "Pending").
-	phaseProvisioning = "Provisioning"
-
-	// phaseBlocked is the CR phase when the rental can't be created yet — no
-	// availability, insufficient balance, disabled region, unsupported ports,
-	// missing SSH key, or a bad credential. The specific reason is on the
-	// Ready condition, and the operator retries without hot-looping.
-	phaseBlocked = "Blocked"
 )
 
-// rentalPhase maps the raw API status to the CR's phase, renaming the API's
-// pre-Running "Pending" to "Provisioning".
+// rentalPhase maps the API's rental status to the GPURental phase, renaming
+// the API's pre-Running "Pending" to "Provisioning".
 func rentalPhase(apiStatus hyperbolic.RentalStatus) string {
-	if apiStatus == hyperbolic.RentalStatusPending {
-		return phaseProvisioning
+	switch apiStatus {
+	case hyperbolic.RentalStatusPending:
+		return hypv1alpha1.PhaseProvisioning
+	case hyperbolic.RentalStatusRunning:
+		return hypv1alpha1.PhaseRunning
+	case hyperbolic.RentalStatusRebooting:
+		return hypv1alpha1.PhaseRebooting
+	case hyperbolic.RentalStatusTerminating:
+		return hypv1alpha1.PhaseTerminating
+	case hyperbolic.RentalStatusTerminated:
+		return hypv1alpha1.PhaseTerminated
+	case hyperbolic.RentalStatusFailed:
+		return hypv1alpha1.PhaseFailed
+	default:
+		return hypv1alpha1.PhaseUnknown
 	}
-	return string(apiStatus)
 }
 
 // GPURentalReconciler reconciles a GPURental object.
@@ -116,15 +115,18 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, nil
 	}
 
-	// Tombstone: once explicitly terminated the CR is read-only and never
-	// re-provisions, regardless of the spec (needs no credentials).
-	if gr.Status.Terminated {
+	// Record: once the rental is terminated (by us or externally) the object is
+	// read-only and never provisions again, whatever the spec says.
+	if gr.Status.TerminatedAt != nil {
 		return ctrl.Result{}, nil
 	}
 
 	if credErr != nil {
 		log.Info("credentials not resolvable", "error", credErr.Error())
-		r.setBlocked(&gr, "CredentialError", credErr.Error())
+		r.setSynced(&gr, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, credErr.Error())
+		if gr.Status.RentalID == "" {
+			r.setBlocked(&gr, hypv1alpha1.ReasonCredentialError, credErr.Error())
+		}
 		return r.finish(ctx, &gr, apiRetry)
 	}
 
@@ -175,13 +177,12 @@ func (r *GPURentalReconciler) reconcileStop(ctx context.Context, gr *hypv1alpha1
 	rentalID := r.rentalID(gr)
 	if rentalID != "" {
 		if err := terminateRental(ctx, hc, rentalID, "spec.terminated=true"); err != nil && !isGoneError(err) {
-			r.setReady(gr, metav1.ConditionFalse, reasonAPIError, err.Error())
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "terminate: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 	}
-	gr.Status.Terminated = true
-	gr.Status.Phase = string(hyperbolic.RentalStatusTerminated)
-	r.setReady(gr, metav1.ConditionFalse, "Terminated", "Rental terminated (spec.terminated=true); this GPURental is now read-only")
+	r.markTerminated(gr, hypv1alpha1.ReasonTerminated, "Rental terminated (spec.terminated=true); this GPURental is now a read-only record")
+	r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
 	return r.finish(ctx, gr, 0)
 }
 
@@ -197,15 +198,15 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 	if id := gr.Annotations[hypv1alpha1.AnnotationRentalID]; id != "" {
 		vm, err := r.findByRentalID(ctx, hc, id)
 		if err != nil {
-			r.setReady(gr, metav1.ConditionUnknown, reasonAPIError, "list rentals: "+err.Error())
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
+		r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
 		if vm != nil {
 			r.applyRentalToStatus(gr, vm)
 			return r.finish(ctx, gr, pollInterval(vm.Status))
 		}
-		gr.Status.Phase = string(hyperbolic.RentalStatusTerminated)
-		r.setReady(gr, metav1.ConditionFalse, "Terminated", "Rental no longer active (terminated externally)")
+		r.markTerminatedExternally(gr)
 		return r.finish(ctx, gr, 0)
 	}
 
@@ -213,13 +214,14 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 	if gr.Spec.DisplayName != "" {
 		vm, err := r.adoptByLabel(ctx, hc, gr)
 		if err != nil {
-			r.setReady(gr, metav1.ConditionUnknown, reasonAPIError, "list rentals: "+err.Error())
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 		if vm != nil {
 			log.Info("adopted existing rental by label", "rentalId", vm.RentalID)
 			r.stampRentalID(ctx, gr, vm.RentalID)
 			r.applyRentalToStatus(gr, vm)
+			r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
 			return r.finish(ctx, gr, pollInterval(vm.Status))
 		}
 	}
@@ -238,7 +240,8 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if r.Catalog != nil {
 		opts, _, err := r.Catalog.Get(ctx, hc, creds.key())
 		if err != nil && len(opts) == 0 {
-			r.setBlocked(gr, reasonAPIError, "rental-options: "+err.Error())
+			r.setBlocked(gr, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 		options = opts
@@ -246,10 +249,12 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		var err error
 		options, err = hc.Rentals.Options(ctx)
 		if err != nil {
-			r.setBlocked(gr, reasonAPIError, "rental-options: "+err.Error())
+			r.setBlocked(gr, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
 	}
+	r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
 
 	chosen, reason, msg := selectOption(options, gr.Spec)
 	if chosen == nil {
@@ -260,7 +265,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	// Balance preflight (~1h of runway including overdraft).
 	if bal, err := getBalance(ctx, hc); err == nil {
 		if float64(bal.BalanceCents+bal.MaxOverdraftCents) < chosen.CostPerHourCents {
-			r.setBlocked(gr, "InsufficientBalance",
+			r.setBlocked(gr, hypv1alpha1.ReasonInsufficientBalance,
 				fmt.Sprintf("balance %d + overdraft %d cents < ~1h cost %.0f cents",
 					bal.BalanceCents, bal.MaxOverdraftCents, chosen.CostPerHourCents))
 			return r.finish(ctx, gr, blockedRetry)
@@ -293,6 +298,9 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		reason, msg := classifyCreateError(err)
 		log.Info("create failed", "reason", reason, "error", err.Error())
 		r.setBlocked(gr, reason, msg)
+		if reason == hypv1alpha1.ReasonAPIError {
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "create: "+err.Error())
+		}
 		return r.finish(ctx, gr, createErrorRetry(reason))
 	}
 
@@ -306,11 +314,15 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if row.Region != "" {
 		gr.Status.Region = row.Region
 	}
-	gr.Status.Phase = phaseProvisioning
+	if label, err := row.Label.Get(); err == nil {
+		gr.Status.Label = label
+	}
+	gr.Status.NetworkType = networkType
+	gr.Status.Phase = hypv1alpha1.PhaseProvisioning
 	if len(gr.Spec.Ports) > 0 {
 		gr.Status.OpenPorts = gr.Spec.Ports
 	}
-	r.setReady(gr, metav1.ConditionFalse, "Provisioning", "Rental created; provisioning")
+	r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning, "Rental created; provisioning")
 	log.Info("created rental", "rentalId", row.RentalID, "region", chosen.Region)
 	return r.finish(ctx, gr, pendingPoll)
 }
@@ -319,14 +331,16 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client) (ctrl.Result, error) {
 	vm, err := r.findByRentalID(ctx, hc, gr.Status.RentalID)
 	if err != nil {
-		// Transient list error — keep the last-known phase and retry; never
-		// flip a live rental to Terminated because a poll failed.
-		return ctrl.Result{RequeueAfter: apiRetry}, nil
+		// Transient list error: keep the last-known phase and Ready, report it
+		// on Synced, and retry. Never flip a live rental to Terminated because
+		// a poll failed.
+		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
+		return r.finish(ctx, gr, apiRetry)
 	}
+	r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
 	if vm == nil {
-		// Genuinely no longer in the active list → it's gone.
-		gr.Status.Phase = string(hyperbolic.RentalStatusTerminated)
-		r.setReady(gr, metav1.ConditionFalse, "Terminated", "Rental no longer active")
+		// The list succeeded and the rental is not in it: it ended without us.
+		r.markTerminatedExternally(gr)
 		return r.finish(ctx, gr, 0)
 	}
 
@@ -365,8 +379,14 @@ func (r *GPURentalReconciler) applyRentalToStatus(gr *hypv1alpha1.GPURental, vm 
 	if name, err := vm.Name.Get(); err == nil {
 		gr.Status.Name = name
 	}
+	if label, err := vm.Label.Get(); err == nil {
+		gr.Status.Label = label
+	}
 	if vm.Region != "" {
 		gr.Status.Region = vm.Region
+	}
+	if vm.ConnectionType != "" {
+		gr.Status.NetworkType = string(vm.ConnectionType)
 	}
 	if cost := costPerHour(vm.CurrentTerm); cost > 0 {
 		// currentTerm.costPerHour is already in cents (verified live: 3192 == $31.92/hr).
@@ -377,19 +397,41 @@ func (r *GPURentalReconciler) applyRentalToStatus(gr *hypv1alpha1.GPURental, vm 
 
 	switch vm.Status {
 	case hyperbolic.RentalStatusRunning:
-		r.setReady(gr, metav1.ConditionTrue, "Running",
+		r.setReady(gr, metav1.ConditionTrue, hypv1alpha1.ReasonRunning,
 			fmt.Sprintf("%d/%d instances running", runningCount(gr.Status.Instances), len(gr.Status.Instances)))
 	case hyperbolic.RentalStatusPending:
-		r.setReady(gr, metav1.ConditionFalse, "Provisioning", "Rental is provisioning")
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning, "Rental is provisioning")
 	case hyperbolic.RentalStatusRebooting:
-		r.setReady(gr, metav1.ConditionFalse, "Rebooting", "Rental is rebooting")
-	case hyperbolic.RentalStatusTerminating, hyperbolic.RentalStatusTerminated:
-		r.setReady(gr, metav1.ConditionFalse, "Terminated", "Rental is terminating/terminated")
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonRebooting, "Rental is rebooting")
+	case hyperbolic.RentalStatusTerminating:
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonTerminating, "Rental is terminating")
+	case hyperbolic.RentalStatusTerminated:
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonTerminated, "Rental is terminated")
 	case hyperbolic.RentalStatusFailed:
-		r.setReady(gr, metav1.ConditionFalse, "Failed", "Rental failed")
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonFailed, "Rental failed")
 	default:
-		r.setReady(gr, metav1.ConditionUnknown, "Unknown", "Rental status unknown")
+		r.setReady(gr, metav1.ConditionUnknown, hypv1alpha1.ReasonUnknown, "Rental status unknown")
 	}
+}
+
+// markTerminated records that the rental is over. The object becomes a
+// read-only record: it is never provisioned again.
+func (r *GPURentalReconciler) markTerminated(gr *hypv1alpha1.GPURental, reason, msg string) {
+	now := metav1.Now()
+	gr.Status.TerminatedAt = &now
+	gr.Status.Phase = hypv1alpha1.PhaseTerminated
+	gr.Status.Instances = nil
+	r.setReady(gr, metav1.ConditionFalse, reason, msg)
+}
+
+// markTerminatedExternally records a rental that ended without the operator
+// asking. It is never rented again automatically: doing so could repeat
+// whatever ended it (an empty balance) and spend money nobody asked for.
+func (r *GPURentalReconciler) markTerminatedExternally(gr *hypv1alpha1.GPURental) {
+	r.markTerminated(gr, hypv1alpha1.ReasonTerminatedExternally,
+		"The rental is no longer active and was not terminated by this operator "+
+			"(for example the balance ran out or it was ended in the dashboard). "+
+			"It will not be rented again; create a new GPURental to rent again.")
 }
 
 // ---- lookups -------------------------------------------------------------
@@ -475,10 +517,23 @@ func (r *GPURentalReconciler) setReady(gr *hypv1alpha1.GPURental, status metav1.
 	gr.Status.ObservedGeneration = gr.Generation
 }
 
+// setSynced records whether this reconcile could read its credentials and
+// reach the API. It never changes Ready: a failed poll says nothing about
+// whether the rental is still running.
+func (r *GPURentalReconciler) setSynced(gr *hypv1alpha1.GPURental, status metav1.ConditionStatus, reason, msg string) {
+	if status == metav1.ConditionTrue && msg == "" {
+		msg = "Last reconcile reached the Hyperbolic API"
+	}
+	apimeta.SetStatusCondition(&gr.Status.Conditions, metav1.Condition{
+		Type: hypv1alpha1.ConditionSynced, Status: status, Reason: reason, Message: msg,
+		ObservedGeneration: gr.Generation,
+	})
+}
+
 // setBlocked marks the rental as unable to be created yet (phase Blocked) with
 // the specific reason on the Ready condition.
 func (r *GPURentalReconciler) setBlocked(gr *hypv1alpha1.GPURental, reason, msg string) {
-	gr.Status.Phase = phaseBlocked
+	gr.Status.Phase = hypv1alpha1.PhaseBlocked
 	r.setReady(gr, metav1.ConditionFalse, reason, msg)
 }
 
@@ -539,7 +594,7 @@ func selectOption(options []hyperbolic.RentalOption, spec hypv1alpha1.GPURentalS
 		candidates = append(candidates, o)
 	}
 	if len(candidates) == 0 {
-		return nil, "AvailabilityUnavailable", fmt.Sprintf(
+		return nil, hypv1alpha1.ReasonAvailabilityUnavailable, fmt.Sprintf(
 			"no available option for %s x%d%s%s", spec.GPUType, spec.GPUCount,
 			regionSuffix(spec.Region), priceSuffix(spec.MaxPriceCentsPerHour))
 	}
@@ -552,17 +607,17 @@ func selectOption(options []hyperbolic.RentalOption, spec hypv1alpha1.GPURentalS
 func classifyCreateError(err error) (reason, msg string) {
 	switch {
 	case hyperbolic.HasCode(err, hyperbolic.CodeCustomPortsNotSupportedForRegion):
-		return "PortsUnsupportedInRegion", "custom ports are not supported in the selected region; use a forge region or remove spec.ports"
+		return hypv1alpha1.ReasonPortsUnsupportedInRegion, "custom ports are not supported in the selected region; use a forge region or remove spec.ports"
 	case hyperbolic.HasCode(err, hyperbolic.CodeNoPublicKey):
-		return "NoSSHKey", "the account has no SSH public key registered; add one in the Hyperbolic dashboard before renting"
+		return hypv1alpha1.ReasonNoSSHKey, "the account has no SSH public key registered; add one in the Hyperbolic dashboard before renting"
 	case hyperbolic.HasCode(err, hyperbolic.CodeRegionDisabled):
-		return "RegionDisabled", "the selected region is not enabled for this account: " + err.Error()
+		return hypv1alpha1.ReasonRegionDisabled, "the selected region is not enabled for this account: " + err.Error()
 	case hyperbolic.HasCode(err, hyperbolic.CodeInsufficientBalance):
-		return "InsufficientBalance", err.Error()
+		return hypv1alpha1.ReasonInsufficientBalance, err.Error()
 	case hyperbolic.HasCode(err, hyperbolic.CodeFailedToCalculateCostPerHour):
-		return "AvailabilityUnavailable", "no matching offering (cost calculation failed) for the requested config/fabric/region"
+		return hypv1alpha1.ReasonAvailabilityUnavailable, "no matching offering (cost calculation failed) for the requested config/fabric/region"
 	default:
-		return reasonAPIError, err.Error()
+		return hypv1alpha1.ReasonAPIError, err.Error()
 	}
 }
 
@@ -570,7 +625,7 @@ func classifyCreateError(err error) (reason, msg string) {
 // terminal-until-spec-change (slow) or transient (faster).
 func createErrorRetry(reason string) time.Duration {
 	switch reason {
-	case reasonAPIError:
+	case hypv1alpha1.ReasonAPIError:
 		return apiRetry
 	default:
 		return blockedRetry

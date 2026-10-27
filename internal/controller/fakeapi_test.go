@@ -94,6 +94,20 @@ func newRentalReconciler() *GPURentalReconciler {
 	}
 }
 
+// createRental creates gr and reconciles it until the fake API holds its
+// rental (finalizer, then create). It returns the object's key and the
+// rental's id.
+func (a *fakeAccount) createRental(ctx context.Context, r reconcile.Reconciler, gr *hypv1alpha1.GPURental) (types.NamespacedName, string) {
+	GinkgoHelper()
+	Expect(k8sClient.Create(ctx, gr)).To(Succeed())
+	key := types.NamespacedName{Namespace: gr.Namespace, Name: gr.Name}
+	reconcileOnce(ctx, r, key)
+	reconcileOnce(ctx, r, key)
+	Expect(k8sClient.Get(ctx, key, gr)).To(Succeed())
+	Expect(gr.Status.RentalID).NotTo(BeEmpty(), "the rental was not created: %+v", gr.Status.Conditions)
+	return key, gr.Status.RentalID
+}
+
 // reconcileOnce runs one reconcile of key and fails the spec on error.
 func reconcileOnce(ctx context.Context, r reconcile.Reconciler, key types.NamespacedName) ctrl.Result {
 	GinkgoHelper()

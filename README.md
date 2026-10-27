@@ -195,11 +195,14 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | `phase` | `Provisioning` (created, coming up) / `Running` / `Rebooting` / `Terminating` / `Terminated` / `Failed` / `Blocked` (can't be created yet, see the reason on `Ready`) / `Unknown`. |
 | `rentalId` | The server's string rental id. |
 | `name` | The server's 3-word rental name (shown in the dashboard). |
+| `label` | The rental's label (the name in the dashboard). |
 | `region` | Resolved region. |
+| `networkType` | The rental's fabric: `ethernet` or `infiniband`. |
 | `costCentsPerHour` | Current hourly cost, in cents. |
 | `openPorts` | Custom ports opened on the instance. |
 | `instances[]` | Per-node `instanceRef`, `phase`, `ssh`, `internalIp`. |
-| `conditions[]` | `Ready` plus a reason (see below). |
+| `terminatedAt` | When the rental was seen terminated. Once set, the object is a read-only record and never rents again. |
+| `conditions[]` | `Ready` and `Synced` (see below). |
 
 ### GPUAvailability
 
@@ -274,7 +277,12 @@ spec:
 
 ## Status & conditions
 
-Everything the operator decides shows up on the `Ready` condition. Inspect it with:
+Every resource reports two conditions, and automation should read them rather than `phase`:
+
+- **`Ready`** says whether the thing is usable (the rental is running, the config's key works, the catalog view is populated). Its reason says why not.
+- **`Synced`** says whether the last reconcile could read the API key and reach the Hyperbolic API. `Synced=False` with `APIError` or `CredentialError` is a transient or configuration problem. It never changes `Ready`, so a failed poll never marks a running rental as gone.
+
+Inspect them with:
 
 ```console
 kubectl describe gpurental train-run-42
@@ -284,12 +292,15 @@ kubectl describe gpurental train-run-42
 |---|---|
 | `Running` | Rental is up; `status.instances[]` has your SSH. |
 | `Provisioning` | Rental created, waiting for nodes. |
+| `Terminated` | The operator terminated the rental (`spec.terminated`). The object stays as a record. |
+| `TerminatedExternally` | The rental ended without the operator (balance ran out, ended in the dashboard, hardware failure). It is never rented again automatically. Create a new GPURental. |
 | `AvailabilityUnavailable` | No matching, in-stock option for that gpuType/count/region/fabric/price. Loosen the spec. |
 | `InsufficientBalance` | Not enough balance (+ overdraft) for ~1h. Top up. |
 | `RegionDisabled` | The region isn't enabled for your account. Pick another or omit `region`. |
 | `PortsUnsupportedInRegion` | `spec.ports` set in a region without custom-port support. Use a supported region or drop `ports`. |
 | `NoSSHKey` | Your account has no SSH key. Register one in the dashboard, then it retries. |
 | `CredentialError` | The Secret/key is missing or invalid. |
+| `APIError` | The Hyperbolic API failed (5xx, timeout, rate limit). Retried every 30s. |
 
 Preflight failures never create a rental (no charge), and the operator backs off rather than hot-looping. Fix the spec or the account and it recovers on its own.
 
