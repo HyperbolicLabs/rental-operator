@@ -18,6 +18,8 @@ package controller
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"time"
 
@@ -129,6 +131,58 @@ func newAvailabilityReconciler(ttl time.Duration) *GPUAvailabilityReconciler {
 		NewClient:     testClientFactory,
 		RentalOptions: account.NewRentalOptionsCache(ttl),
 	}
+}
+
+// newSSHKeyReconciler returns an SSHKeyReconciler wired to envtest and to
+// whichever fake API a ProviderConfig points at.
+func newSSHKeyReconciler() *SSHKeyReconciler {
+	return &SSHKeyReconciler{
+		Client:      k8sClient,
+		Scheme:      k8sClient.Scheme(),
+		NewClient:   testClientFactory,
+		Credentials: account.NewCredentialsMemory(),
+		Clock:       clock.RealClock{},
+		Recorder:    &record.FakeRecorder{},
+		APIReader:   k8sClient,
+	}
+}
+
+// sshKey returns an unsaved SSHKey for a test key named seed (see
+// testPublicKey) in the account's namespace, using the account's
+// ProviderConfig.
+func (a *fakeAccount) sshKey(name, seed string) *hypv1alpha1.SSHKey {
+	return &hypv1alpha1.SSHKey{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: a.namespace},
+		Spec: hypv1alpha1.SSHKeySpec{
+			ProviderConfigRef: a.config,
+			PublicKey:         testPublicKey(seed),
+		},
+	}
+}
+
+// saveSSHKey creates key and reconciles it until it is Ready (finalizer,
+// then save). It returns the object's key and the saved key's id.
+func (a *fakeAccount) saveSSHKey(ctx context.Context, r reconcile.Reconciler, key *hypv1alpha1.SSHKey) (types.NamespacedName, int64) {
+	GinkgoHelper()
+	Expect(k8sClient.Create(ctx, key)).To(Succeed())
+	name := types.NamespacedName{Namespace: key.Namespace, Name: key.Name}
+	reconcileOnce(ctx, r, name)
+	reconcileOnce(ctx, r, name)
+	Expect(k8sClient.Get(ctx, name, key)).To(Succeed())
+	Expect(key.Status.ID).NotTo(BeZero(), "the key was not saved: %+v", key.Status.Conditions)
+	return name, key.Status.ID
+}
+
+// testPublicKey returns a well-formed ed25519 public key line, one per
+// seed, with seed as its comment.
+func testPublicKey(seed string) string {
+	body := make([]byte, 32)
+	copy(body, seed)
+	blob := binary.BigEndian.AppendUint32(nil, 11)
+	blob = append(blob, "ssh-ed25519"...)
+	blob = binary.BigEndian.AppendUint32(blob, 32)
+	blob = append(blob, body...)
+	return "ssh-ed25519 " + base64.StdEncoding.EncodeToString(blob) + " " + seed
 }
 
 // alwaysLater is a clock on which every cached rental list is already

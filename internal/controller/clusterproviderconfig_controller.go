@@ -76,7 +76,8 @@ func (r *ClusterProviderConfigReconciler) Reconcile(ctx context.Context, req ctr
 }
 
 // SetupWithManager sets up the controller with the Manager. It also watches
-// Secrets in the operator's namespace and GPURentals in every namespace.
+// Secrets in the operator's namespace, and GPURentals and SSHKeys in every
+// namespace.
 func (r *ClusterProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := r.validate(); err != nil {
 		return err
@@ -84,8 +85,10 @@ func (r *ClusterProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) err
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypv1alpha1.ClusterProviderConfig{}, builder.WithPredicates(configChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.configsForSecret)).
-		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOfRental(true)),
+		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOf(true)),
 			builder.WithPredicates(rentalUsageChanged)).
+		Watches(&hypv1alpha1.SSHKey{}, handler.EnqueueRequestsFromMapFunc(configOf(true)),
+			builder.WithPredicates(sshKeyUsageChanged)).
 		Named("clusterproviderconfig").
 		Complete(r)
 }

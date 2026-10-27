@@ -43,6 +43,7 @@ var _ = Describe("Reconciler dependencies", func() {
 			}
 		}),
 		Entry("GPUAvailability", func() reconciler { return newAvailabilityReconciler(0) }),
+		Entry("SSHKey", func() reconciler { return newSSHKeyReconciler() }),
 		Entry("GPURental without the optional Metrics and APIReader", func() reconciler {
 			r := newRentalReconciler()
 			r.Metrics, r.APIReader = nil, nil
@@ -63,6 +64,8 @@ var _ = Describe("Reconciler dependencies", func() {
 			"ClusterProviderConfig reconciler is missing Client, Scheme, NewClient"),
 		Entry("GPUAvailability", &GPUAvailabilityReconciler{},
 			"GPUAvailability reconciler is missing Client, Scheme, NewClient, RentalOptions"),
+		Entry("SSHKey", &SSHKeyReconciler{},
+			"SSHKey reconciler is missing Client, Scheme, NewClient, Credentials, Clock, Recorder"),
 	)
 
 	It("names only what is missing", func() {

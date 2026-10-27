@@ -12,7 +12,7 @@
 - Kubernetes 1.35, 1.36 or 1.37, and `kubectl`. These are the versions CI tests. See [SUPPORT.md](../SUPPORT.md).
 - [Helm](https://helm.sh) 3.x.
 - A **Hyperbolic API key** (`sk_live_...`) from the [dashboard](https://app.hyperbolic.ai).
-- An **SSH public key registered on your Hyperbolic account** (in the dashboard) if you want to log into the rented machines. Rentals get your account's registered key. The operator does not manage SSH keys. If the account has no key, rentals stay `Blocked` with `NoSSHKey` instead of provisioning a machine you can't reach.
+- An **SSH public key** if you want to log into the rented machines. Save it on the account with an [SSHKey](resources.md#sshkey), or in the dashboard. A rental gets the keys in its `sshKeyRefs`, or else the account's newest key. If the account has no key, rentals stay `Blocked` with `NoSSHKey` instead of provisioning a machine you can't reach.
 
 ## Install
 
@@ -80,11 +80,11 @@ Read the [release notes](https://github.com/HyperbolicLabs/rental-operator/relea
 
 ## Uninstall
 
-Delete your objects **while the operator is still running**. Without the operator nothing terminates the rentals, so they keep billing, and nothing removes the finalizers on GPURentals and configs, so they cannot be deleted.
+Delete your objects **while the operator is still running**. Without the operator nothing terminates the rentals, so they keep billing, and nothing removes the finalizers on GPURentals, SSHKeys and configs, so they cannot be deleted.
 
 ```console
 kubectl delete gpurentals --all -A --wait
-kubectl delete gpuavailabilities,providerconfigs --all -A --wait
+kubectl delete gpuavailabilities,sshkeys,providerconfigs --all -A --wait
 kubectl delete clusterproviderconfigs --all --wait
 helm uninstall rental-operator --namespace rental-operator-system
 ```
@@ -93,5 +93,5 @@ Helm leaves the CRDs in place. Remove them once nothing is left:
 
 ```console
 kubectl delete crd gpurentals.compute.hyperbolic.ai gpuavailabilities.compute.hyperbolic.ai \
-  providerconfigs.compute.hyperbolic.ai clusterproviderconfigs.compute.hyperbolic.ai
+  sshkeys.compute.hyperbolic.ai providerconfigs.compute.hyperbolic.ai clusterproviderconfigs.compute.hyperbolic.ai
 ```

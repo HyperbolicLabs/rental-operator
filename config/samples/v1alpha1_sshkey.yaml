@@ -1,0 +1,20 @@
+apiVersion: compute.hyperbolic.ai/v1alpha1
+kind: SSHKey
+metadata:
+  name: alice
+  namespace: default
+spec:
+  # The account to save the key on: the ProviderConfig in this namespace.
+  providerConfigRef:
+    name: default
+
+  # One line of OpenSSH public key, such as the contents of ~/.ssh/id_ed25519.pub.
+  # It cannot change; create a new SSHKey for another key.
+  publicKey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGV4YW1wbGUta2V5LXJlcGxhY2Utd2l0aC15b3VycyEh alice@laptop
+
+  # Deleting this object deletes the key from the account if the operator saved
+  # it. Orphan leaves it saved. A key the account already had is never deleted.
+  # deletionPolicy: Delete
+# Saving a key makes it the account's newest, which the API authorizes by
+# default on rentals created without naming keys. List it in a GPURental's
+# spec.sshKeyRefs to authorize it on that rental.

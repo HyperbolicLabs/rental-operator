@@ -34,4 +34,7 @@ resources:
 - gpurental_admin_role.yaml
 - gpurental_editor_role.yaml
 - gpurental_viewer_role.yaml
+- sshkey_admin_role.yaml
+- sshkey_editor_role.yaml
+- sshkey_viewer_role.yaml
 

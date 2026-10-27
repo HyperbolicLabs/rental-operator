@@ -39,7 +39,6 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
@@ -80,10 +79,10 @@ func rentalLabel(gr *hypv1alpha1.GPURental) string {
 	return name + "-" + uid
 }
 
-// createPendingSince reports when the last create was sent, if its outcome
-// has not been recorded yet.
-func createPendingSince(gr *hypv1alpha1.GPURental) (time.Time, bool) {
-	v, ok := gr.Annotations[hypv1alpha1.AnnotationCreatePending]
+// createPendingSince reports when the object's last create was sent, if its
+// outcome has not been recorded yet.
+func createPendingSince(obj metav1.Object) (time.Time, bool) {
+	v, ok := obj.GetAnnotations()[hypv1alpha1.AnnotationCreatePending]
 	if !ok {
 		return time.Time{}, false
 	}
@@ -139,7 +138,7 @@ func (r *GPURentalReconciler) resolvePendingCreate(ctx context.Context, gr *hypv
 			return r.finish(ctx, gr, wait)
 		}
 		log.Info("the last create did not take effect; creating again")
-		if err := r.patchAnnotations(ctx, gr, nil, hypv1alpha1.AnnotationCreatePending); err != nil {
+		if err := patchAnnotations(ctx, r.Client, gr, nil, hypv1alpha1.AnnotationCreatePending); err != nil {
 			return ctrl.Result{}, err
 		}
 		return r.preflightAndCreate(ctx, gr, hc, creds)
@@ -170,43 +169,13 @@ func (r *GPURentalReconciler) adopt(ctx context.Context, gr *hypv1alpha1.GPURent
 // create-pending in one write, before status is updated: an annotation
 // survives a failed status write.
 func (r *GPURentalReconciler) recordRentalID(ctx context.Context, gr *hypv1alpha1.GPURental, id string) error {
-	err := r.patchAnnotations(ctx, gr,
+	err := patchAnnotations(ctx, r.Client, gr,
 		map[string]string{hypv1alpha1.AnnotationRentalID: id},
 		hypv1alpha1.AnnotationCreatePending)
 	if err != nil {
 		return fmt.Errorf("record rental id %s: %w", id, err)
 	}
 	return nil
-}
-
-// patchAnnotations sets and removes annotations on the object with a merge
-// patch.
-func (r *GPURentalReconciler) patchAnnotations(ctx context.Context, gr *hypv1alpha1.GPURental, set map[string]string, remove ...string) error {
-	changed := false
-	for k, v := range set {
-		if gr.Annotations[k] != v {
-			changed = true
-		}
-	}
-	for _, k := range remove {
-		if _, ok := gr.Annotations[k]; ok {
-			changed = true
-		}
-	}
-	if !changed {
-		return nil
-	}
-	base := gr.DeepCopy()
-	if gr.Annotations == nil {
-		gr.Annotations = map[string]string{}
-	}
-	for k, v := range set {
-		gr.Annotations[k] = v
-	}
-	for _, k := range remove {
-		delete(gr.Annotations, k)
-	}
-	return r.Patch(ctx, gr, client.MergeFrom(base))
 }
 
 // reconcileEnsureCreated adopts an orphaned rental or creates a new one.
@@ -264,6 +233,17 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds account.Credentials) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
+	// The keys to authorize must be saved first. SSHKey changes requeue the
+	// rental, so the interval is a backstop.
+	keyIDs, notReady, err := r.sshKeyIDs(ctx, gr)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if notReady != "" {
+		r.setBlocked(gr, hypv1alpha1.ReasonSSHKeyNotReady, notReady)
+		return r.finish(ctx, gr, blockedRetry)
+	}
+
 	// Read the account's rental options through the shared cache: one API
 	// call per account per interval, whatever the number of objects.
 	options, _, err := r.RentalOptions.Get(ctx, hc, creds.Key())
@@ -309,10 +289,17 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		ports := int32sToInts(gr.Spec.Ports)
 		req.CustomPorts = &ports
 	}
+	if len(keyIDs) > 0 {
+		ids := make([]int, len(keyIDs))
+		for i, id := range keyIDs {
+			ids[i] = int(id)
+		}
+		req.SSHPublicKeyIds = &ids
+	}
 
 	// Write ahead: if this annotation cannot be recorded, send nothing.
 	pending := map[string]string{hypv1alpha1.AnnotationCreatePending: r.Clock.Now().UTC().Format(time.RFC3339)}
-	if err := r.patchAnnotations(ctx, gr, pending); err != nil {
+	if err := patchAnnotations(ctx, r.Client, gr, pending); err != nil {
 		return ctrl.Result{}, fmt.Errorf("record create-pending: %w", err)
 	}
 
@@ -331,7 +318,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	}
 	if err != nil {
 		// A definite failure: nothing was created.
-		if cerr := r.patchAnnotations(ctx, gr, nil, hypv1alpha1.AnnotationCreatePending); cerr != nil {
+		if cerr := patchAnnotations(ctx, r.Client, gr, nil, hypv1alpha1.AnnotationCreatePending); cerr != nil {
 			return ctrl.Result{}, fmt.Errorf("clear create-pending: %w", cerr)
 		}
 		reason, msg := classifyCreateError(err)
@@ -364,6 +351,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	if len(gr.Spec.Ports) > 0 {
 		gr.Status.OpenPorts = gr.Spec.Ports
 	}
+	gr.Status.SSHKeyIDs = keyIDs
 	r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning, "Rental created; provisioning")
 	log.Info("created rental", "rentalId", row.RentalID, "region", chosen.Region)
 	return r.finish(ctx, gr, pendingPoll)

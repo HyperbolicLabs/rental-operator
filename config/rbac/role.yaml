@@ -36,6 +36,7 @@ rules:
   - clusterproviderconfigs/finalizers
   - gpurentals/finalizers
   - providerconfigs/finalizers
+  - sshkeys/finalizers
   verbs:
   - update
 - apiGroups:
@@ -45,6 +46,7 @@ rules:
   - gpuavailabilities/status
   - gpurentals/status
   - providerconfigs/status
+  - sshkeys/status
   verbs:
   - get
   - patch
@@ -55,6 +57,7 @@ rules:
   - gpuavailabilities
   - gpurentals
   - providerconfigs
+  - sshkeys
   verbs:
   - create
   - delete

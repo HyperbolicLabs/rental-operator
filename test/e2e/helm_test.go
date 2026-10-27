@@ -48,7 +48,7 @@ var _ = Describe("Helm chart", Ordered, func() {
 		scraperPod     = "scrape-metrics"
 		scraperBinding = "rental-operator-e2e-metrics-scraper"
 	)
-	controllers := []string{"providerconfig", "clusterproviderconfig", "gpurental", "gpuavailability"}
+	controllers := []string{"providerconfig", "clusterproviderconfig", "gpurental", "gpuavailability", "sshkey"}
 	samples := []string{"config/samples/v1alpha1_providerconfig.yaml", "config/samples/v1alpha1_gpurental.yaml"}
 	// deleteSamples deletes the rental before its config: the config's in-use
 	// finalizer holds it while a rental uses it.

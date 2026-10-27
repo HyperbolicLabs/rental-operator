@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
@@ -27,8 +26,10 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
@@ -84,13 +85,11 @@ type GPURentalReconciler struct {
 
 // validate checks the reconciler's required dependencies.
 func (r *GPURentalReconciler) validate() error {
-	return checkDependencies("GPURental", append(apiDependencies(r.Client, r.Scheme, r.NewClient),
+	deps := append(apiDependencies(r.Client, r.Scheme, r.NewClient),
 		dependency{"RentalOptions", r.RentalOptions == nil},
 		dependency{"Rentals", r.Rentals == nil},
-		dependency{"Credentials", r.Credentials == nil},
-		dependency{"Clock", r.Clock == nil},
-		dependency{"Recorder", r.Recorder == nil},
-	)...)
+	)
+	return checkDependencies("GPURental", append(deps, createDeleteDependencies(r.Credentials, r.Clock, r.Recorder)...)...)
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals,verbs=get;list;watch;create;update;patch;delete
@@ -98,6 +97,7 @@ func (r *GPURentalReconciler) validate() error {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals/finalizers,verbs=update
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch
+// +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=sshkeys,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -117,7 +117,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		hc, credErr = creds.Client(r.NewClient)
 	}
 	if credErr == nil {
-		r.Credentials.Remember(configKey(&gr), creds)
+		r.Credentials.Remember(configKey(gr.Namespace, gr.Spec.ProviderConfigRef), creds)
 	}
 
 	// Deletion.
@@ -142,10 +142,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	if credErr != nil {
 		log.Info("credentials not resolvable", "error", credErr.Error())
-		reason := hypv1alpha1.ReasonCredentialError
-		if errors.Is(credErr, account.ErrNamespaceNotAllowed) {
-			reason = hypv1alpha1.ReasonNamespaceNotAllowed
-		}
+		reason := credentialErrorReason(credErr)
 		r.setSynced(&gr, metav1.ConditionFalse, reason, credErr.Error())
 		if gr.Status.RentalID == "" {
 			r.setBlocked(&gr, reason, credErr.Error())
@@ -189,6 +186,13 @@ func (r *GPURentalReconciler) reconcilePoll(ctx context.Context, gr *hypv1alpha1
 		r.rebootInstances(ctx, hc, gr, vm)
 	}
 
+	// Keys can be attached and detached while the rental starts or runs.
+	if vm.Status == hyperbolic.RentalStatusPending || vm.Status == hyperbolic.RentalStatusRunning {
+		if err := r.applySSHKeys(ctx, gr, hc, vm.RentalID); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
 	r.applyRentalToStatus(gr, vm)
 	return r.finish(ctx, gr, pollInterval(vm.Status))
 }
@@ -209,19 +213,23 @@ func (r *GPURentalReconciler) rebootInstances(ctx context.Context, hc *hyperboli
 	}
 	if rebooted {
 		gen := map[string]string{hypv1alpha1.AnnotationRebootedGeneration: strconv.Itoa(int(gr.Spec.RebootGeneration))}
-		if err := r.patchAnnotations(ctx, gr, gen); err != nil {
+		if err := patchAnnotations(ctx, r.Client, gr, gen); err != nil {
 			log.Info("failed to record the applied reboot generation", "error", err.Error())
 		}
 	}
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager sets up the controller with the Manager. It also watches
+// SSHKeys, so a rental waiting for a key, or one whose keys change, is
+// reconciled promptly.
 func (r *GPURentalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := r.validate(); err != nil {
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypv1alpha1.GPURental{}).
+		Watches(&hypv1alpha1.SSHKey{}, handler.EnqueueRequestsFromMapFunc(r.rentalsForSSHKey),
+			builder.WithPredicates(sshKeyUsableChanged)).
 		Named("gpurental").
 		Complete(r)
 }

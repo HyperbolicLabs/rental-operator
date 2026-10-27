@@ -13,6 +13,7 @@ Package v1alpha1 contains API Schema definitions for the compute.hyperbolic.ai v
 - [GPUAvailability](#gpuavailability)
 - [GPURental](#gpurental)
 - [ProviderConfig](#providerconfig)
+- [SSHKey](#sshkey)
 
 
 
@@ -98,19 +99,20 @@ _Appears in:_
 
 _Underlying type:_ _string_
 
-DeletionPolicy decides what happens to the Hyperbolic rental when its
-GPURental is deleted.
+DeletionPolicy decides what happens on Hyperbolic when a GPURental or an
+SSHKey is deleted.
 
 _Validation:_
 - Enum: [Delete Orphan]
 
 _Appears in:_
 - [GPURentalSpec](#gpurentalspec)
+- [SSHKeySpec](#sshkeyspec)
 
 | Field | Description |
 | --- | --- |
-| `Delete` | DeletionPolicyDelete terminates the rental before the object is<br />removed. The object is never removed while the rental may be billing.<br /> |
-| `Orphan` | DeletionPolicyOrphan removes the object and leaves the rental running:<br />to hand a rental to another system, or to delete an object whose<br />credentials are gone (you then terminate the rental yourself).<br /> |
+| `Delete` | DeletionPolicyDelete terminates a GPURental's rental, or deletes the<br />key an SSHKey saved, before the object is removed. A GPURental is<br />never removed while its rental may be billing.<br /> |
+| `Orphan` | DeletionPolicyOrphan removes the object and leaves the rental running,<br />or the key saved: to hand them to another system, or to delete an<br />object whose credentials are gone (you then clean up yourself).<br /> |
 
 
 #### GPUAvailability
@@ -226,6 +228,7 @@ _Appears in:_
 | `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy decides what deleting this object does to the rental.<br />Delete (the default) terminates it first, and the object is not removed<br />until the rental is confirmed gone. Orphan removes the object and leaves<br />the rental running. | Delete | Enum: [Delete Orphan] <br />Optional: \{\} <br /> |
 | `rebootGeneration` _integer_ | RebootGeneration reboots all nodes when its value increases. Leave at 0<br />(or unset) for no reboot. |  | Optional: \{\} <br /> |
 | `maxPriceCentsPerHour` _integer_ | MaxPriceCentsPerHour refuses to create the rental if the marketplace<br />price for the resolved option exceeds this ceiling. It can be changed at<br />any time, for example to unblock a rental waiting for a cheaper offer. |  | Minimum: 1 <br />Optional: \{\} <br /> |
+| `sshKeyRefs` _[SSHKeyReference](#sshkeyreference) array_ | SSHKeyRefs names SSHKeys in this namespace to authorize on the rental.<br />The rental is not created until each one is Ready and uses the same<br />providerConfigRef. They can change while the rental runs: added keys<br />are attached and removed ones detached, unless the rental doesn't<br />allow it, which Synced reports with reason SSHKeyChangeRejected. Keys<br />the operator did not attach are left alone. Without sshKeyRefs, the<br />API authorizes the account's most recently saved key. |  | MaxItems: 32 <br />Optional: \{\} <br /> |
 
 
 #### GPURentalStatus
@@ -250,6 +253,7 @@ _Appears in:_
 | `costCentsPerHour` _integer_ | CostCentsPerHour is the current hourly cost of the rental, in cents. |  | Optional: \{\} <br /> |
 | `openPorts` _integer array_ | OpenPorts echoes the custom ports opened on the instance IP. |  | Optional: \{\} <br /> |
 | `instances` _[InstanceStatus](#instancestatus) array_ | Instances is the per-node SSH/IP/phase view (populated once Running). |  | Optional: \{\} <br /> |
+| `sshKeyIds` _integer array_ | SSHKeyIDs are the ids of the saved keys the operator authorized on the<br />rental, from spec.sshKeyRefs. |  | Optional: \{\} <br /> |
 | `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions are Ready (is the rental running, the reason says why not)<br />and Synced (could the last reconcile reach the Hyperbolic API). |  | Optional: \{\} <br /> |
 | `lastSyncTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastSyncTime is when the operator last reconciled against the API. |  | Optional: \{\} <br /> |
 | `terminatedAt` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | TerminatedAt is when the rental was observed terminated, by the<br />operator (spec.terminated) or externally. Once set, this object is a<br />read-only record and is never provisioned again. Create a new GPURental<br />to rent again. |  | Optional: \{\} <br /> |
@@ -329,6 +333,7 @@ endpoint) a resource uses.
 _Appears in:_
 - [GPUAvailabilitySpec](#gpuavailabilityspec)
 - [GPURentalSpec](#gpurentalspec)
+- [SSHKeySpec](#sshkeyspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -375,6 +380,82 @@ _Appears in:_
 | `costCentsPerHour` _integer_ | CostCentsPerHour is the combined hourly cost of the account's active<br />rentals in cents, as Hyperbolic reports it. |  | Optional: \{\} <br /> |
 | `lastChecked` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#time-v1-meta)_ | LastChecked is when the credential, balance and active rentals were last<br />read from the API. |  | Optional: \{\} <br /> |
 | `managedRentals` _integer_ | ManagedRentals is how many GPURentals use this config and have not<br />finished (their rental is not known to be terminated). While it is above<br />zero, deleting the config waits. |  | Optional: \{\} <br /> |
+| `observedGeneration` _integer_ | ObservedGeneration is the spec generation last processed. |  | Optional: \{\} <br /> |
+
+
+#### SSHKey
+
+
+
+SSHKey saves an SSH public key on a Hyperbolic account. GPURentals list
+it in spec.sshKeyRefs to authorize it on their rentals. Saving a key makes
+it the account's newest, which the API authorizes by default on rentals
+created without naming keys, including teammates' rentals created in the
+dashboard.
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `compute.hyperbolic.ai/v1alpha1` | | |
+| `kind` _string_ | `SSHKey` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  | Optional: \{\} <br /> |
+| `spec` _[SSHKeySpec](#sshkeyspec)_ | spec is the key to save and the account to save it on. |  | Required: \{\} <br /> |
+| `status` _[SSHKeyStatus](#sshkeystatus)_ | status is the observed state of the saved key. |  | Optional: \{\} <br /> |
+
+
+#### SSHKeyReference
+
+
+
+SSHKeyReference names an SSHKey in the rental's namespace.
+
+
+
+_Appears in:_
+- [GPURentalSpec](#gpurentalspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | name of the SSHKey. |  | MaxLength: 253 <br />MinLength: 1 <br /> |
+
+
+#### SSHKeySpec
+
+
+
+SSHKeySpec is an SSH public key to save on a Hyperbolic account, so
+GPURentals can authorize it.
+
+
+
+_Appears in:_
+- [SSHKey](#sshkey)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `providerConfigRef` _[ProviderConfigReference](#providerconfigreference)_ | ProviderConfigRef selects the account to save the key on: a<br />ProviderConfig in this namespace (the default kind) or a<br />ClusterProviderConfig. |  |  |
+| `publicKey` _string_ | PublicKey is the key in OpenSSH authorized_keys format, such as the<br />contents of ~/.ssh/id_ed25519.pub: its type, the base64 key and an<br />optional comment. The account holds each key once, whatever its<br />comment. It cannot change. Create a new SSHKey for another key. |  | MaxLength: 16384 <br />MinLength: 1 <br /> |
+| `deletionPolicy` _[DeletionPolicy](#deletionpolicy)_ | DeletionPolicy decides what deleting this object does to the saved<br />key. Delete (the default) deletes it from the account if the operator<br />saved it, once no live rental uses it. Orphan leaves it saved. A key<br />the account already had is never deleted. | Delete | Enum: [Delete Orphan] <br />Optional: \{\} <br /> |
+
+
+#### SSHKeyStatus
+
+
+
+SSHKeyStatus is the observed state of an SSHKey.
+
+
+
+_Appears in:_
+- [SSHKey](#sshkey)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `id` _integer_ | ID is the saved key's id on the account. |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.35/#condition-v1-meta) array_ | Conditions are Ready (the key is saved and GPURentals can use it, and<br />the reason says whether the operator saved it or adopted it) and<br />Synced (could the last reconcile reach the Hyperbolic API). |  | Optional: \{\} <br /> |
 | `observedGeneration` _integer_ | ObservedGeneration is the spec generation last processed. |  | Optional: \{\} <br /> |
 
 

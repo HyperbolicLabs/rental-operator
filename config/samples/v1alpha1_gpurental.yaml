@@ -27,6 +27,11 @@ spec:
   # Optional guardrail: refuse to create above this hourly price (cents).
   # maxPriceCentsPerHour: 3000
 
+  # Optional SSHKeys in this namespace to authorize on the rental. They can
+  # change while it runs. Omit to authorize the account's newest saved key.
+  # sshKeyRefs:
+  #   - name: alice
+
   # Permanently terminate but keep this object as a read-only record (one-way).
   # terminated: false
 

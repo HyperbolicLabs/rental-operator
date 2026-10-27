@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -86,10 +85,7 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	creds, err := account.Resolver{Client: r.Client, Uncached: r.APIReader, ClusterNamespace: r.ClusterResourceNamespace}.
 		ForReference(ctx, ga.Namespace, ga.Spec.ProviderConfigRef)
 	if err != nil {
-		reason := hypv1alpha1.ReasonCredentialError
-		if errors.Is(err, account.ErrNamespaceNotAllowed) {
-			reason = hypv1alpha1.ReasonNamespaceNotAllowed
-		}
+		reason := credentialErrorReason(err)
 		r.setReady(&ga, metav1.ConditionFalse, reason, err.Error())
 		r.setSynced(&ga, metav1.ConditionFalse, reason, err.Error())
 		return r.finish(ctx, &ga, apiRetry)

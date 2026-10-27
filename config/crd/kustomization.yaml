@@ -6,6 +6,7 @@ resources:
 - bases/compute.hyperbolic.ai_providerconfigs.yaml
 - bases/compute.hyperbolic.ai_gpuavailabilities.yaml
 - bases/compute.hyperbolic.ai_clusterproviderconfigs.yaml
+- bases/compute.hyperbolic.ai_sshkeys.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
