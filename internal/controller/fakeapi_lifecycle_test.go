@@ -71,7 +71,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 		Expect(apierrors.IsNotFound(k8sClient.Get(ctx, key, gr))).To(BeTrue())
 	})
 
-	It("validates a ProviderConfig and reports the account balance", func() {
+	It("validates a ProviderConfig and reports the account as the API does", func() {
 		acct := newFakeAccount(ctx)
 		acct.api.SetBalance(12_345, 500)
 		r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
@@ -84,6 +84,35 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 		Expect(apimeta.IsStatusConditionTrue(pc.Status.Conditions, hypv1alpha1.ConditionReady)).To(BeTrue())
 		Expect(pc.Status.BalanceCents).To(HaveValue(Equal(int64(12_345))))
 		Expect(pc.Status.MaxOverdraftCents).To(HaveValue(Equal(int64(500))))
+		Expect(pc.Status.ActiveRentals).To(HaveValue(BeZero()))
+		Expect(pc.Status.CostCentsPerHour).To(HaveValue(BeZero()))
+
+		By("showing a rental started outside the cluster")
+		_, err := acct.api.Client(GinkgoTB()).Rentals.Create(ctx, h100x1(""))
+		Expect(err).NotTo(HaveOccurred())
+		reconcileOnce(ctx, r, key)
+		Expect(k8sClient.Get(ctx, key, pc)).To(Succeed())
+		Expect(pc.Status.ActiveRentals).To(HaveValue(Equal(int32(1))))
+		Expect(pc.Status.CostCentsPerHour).To(HaveValue(Equal(int64(275))))
+	})
+
+	It("reports a failing account read as an API error", func() {
+		acct := newFakeAccount(ctx)
+		acct.api.InjectFault(hyperbolictest.Fault{
+			Method: http.MethodGet, Path: hyperbolictest.PathActiveRentalSummary,
+			Status: http.StatusBadRequest,
+		})
+		r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
+		key := client.ObjectKey{Namespace: acct.namespace, Name: acct.config.Name}
+
+		reconcileOnce(ctx, r, key)
+
+		pc := &hypv1alpha1.ProviderConfig{}
+		Expect(k8sClient.Get(ctx, key, pc)).To(Succeed())
+		synced := apimeta.FindStatusCondition(pc.Status.Conditions, hypv1alpha1.ConditionSynced)
+		Expect(synced).NotTo(BeNil())
+		Expect(synced.Status).To(Equal(metav1.ConditionFalse))
+		Expect(synced.Reason).To(Equal(hypv1alpha1.ReasonAPIError))
 	})
 
 	It("reports a rejected API key as Unauthenticated", func() {

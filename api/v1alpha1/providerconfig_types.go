@@ -53,7 +53,18 @@ type ProviderConfigStatus struct {
 	// +optional
 	MaxOverdraftCents *int64 `json:"maxOverdraftCents,omitempty"`
 
-	// LastChecked is when the credential was last validated against the API.
+	// ActiveRentals is how many rentals the account has active, including
+	// rentals started outside this cluster, as Hyperbolic reports it.
+	// +optional
+	ActiveRentals *int32 `json:"activeRentals,omitempty"`
+
+	// CostCentsPerHour is the combined hourly cost of the account's active
+	// rentals in cents, as Hyperbolic reports it.
+	// +optional
+	CostCentsPerHour *int64 `json:"costCentsPerHour,omitempty"`
+
+	// LastChecked is when the credential, balance and active rentals were last
+	// read from the API.
 	// +optional
 	LastChecked *metav1.Time `json:"lastChecked,omitempty"`
 
@@ -73,6 +84,7 @@ type ProviderConfigStatus struct {
 // +kubebuilder:resource:shortName=hpc,categories=hyperbolic
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
 // +kubebuilder:printcolumn:name="Balance",type=integer,JSONPath=`.status.balanceCents`,description="Balance in cents"
+// +kubebuilder:printcolumn:name="Cents/Hr",type=integer,JSONPath=`.status.costCentsPerHour`,description="Hourly cost of the account's active rentals in cents"
 // +kubebuilder:printcolumn:name="Rentals",type=integer,JSONPath=`.status.managedRentals`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
@@ -121,6 +133,7 @@ type ClusterProviderConfigSpec struct {
 // +kubebuilder:resource:scope=Cluster,shortName=hcpc,categories=hyperbolic
 // +kubebuilder:printcolumn:name="Endpoint",type=string,JSONPath=`.spec.endpoint`
 // +kubebuilder:printcolumn:name="Balance",type=integer,JSONPath=`.status.balanceCents`,description="Balance in cents"
+// +kubebuilder:printcolumn:name="Cents/Hr",type=integer,JSONPath=`.status.costCentsPerHour`,description="Hourly cost of the account's active rentals in cents"
 // +kubebuilder:printcolumn:name="Rentals",type=integer,JSONPath=`.status.managedRentals`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`

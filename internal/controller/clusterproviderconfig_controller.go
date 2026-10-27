@@ -70,7 +70,7 @@ func (r *ClusterProviderConfigReconciler) Reconcile(ctx context.Context, req ctr
 // Secrets in the operator's namespace and GPURentals in every namespace.
 func (r *ClusterProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.ClusterProviderConfig{}).
+		For(&hypv1alpha1.ClusterProviderConfig{}, builder.WithPredicates(configChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.configsForSecret)).
 		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOfRental(true)),
 			builder.WithPredicates(rentalUsageChanged)).

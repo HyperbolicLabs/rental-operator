@@ -87,7 +87,7 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 // GPURentals, so the in-use count and deletion follow them.
 func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.ProviderConfig{}).
+		For(&hypv1alpha1.ProviderConfig{}, builder.WithPredicates(configChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.providerConfigsForSecret)).
 		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOfRental(false)),
 			builder.WithPredicates(rentalUsageChanged)).
@@ -122,9 +122,9 @@ type configView struct {
 	secretNamespace string
 }
 
-// reconcileConfig validates a config's credentials and reports its balance
-// and in-use count. It holds the config with the in-use finalizer while
-// GPURentals use it.
+// reconcileConfig validates a config's credentials and reports the in-use
+// count, and the account's balance and active rentals as the API reports them.
+// It holds the config with the in-use finalizer while GPURentals use it.
 func reconcileConfig(ctx context.Context, c client.Client, creds credentialSource, newClient ClientFactory, v configView) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 
@@ -160,12 +160,16 @@ func reconcileConfig(ctx context.Context, c client.Client, creds credentialSourc
 	}
 
 	bal, err := getBalance(ctx, hc)
+	var active *hyperbolic.ActiveRentalSummary
+	if err == nil {
+		active, err = hc.Rentals.ActiveSummary(ctx)
+	}
 	if err != nil {
 		reason := hypv1alpha1.ReasonAPIError
 		if hyperbolic.IsUnauthorized(err) {
 			reason = "Unauthenticated"
 		}
-		log.Info("credential validation failed", "reason", reason, "error", err.Error())
+		log.Info("reading the account failed", "reason", reason, "error", err.Error())
 		return finishConfigNotReady(ctx, c, v, reason, err.Error())
 	}
 
@@ -173,6 +177,8 @@ func reconcileConfig(ctx context.Context, c client.Client, creds credentialSourc
 	gen := v.obj.GetGeneration()
 	v.status.BalanceCents = ptr(bal.BalanceCents)
 	v.status.MaxOverdraftCents = ptr(bal.MaxOverdraftCents)
+	v.status.ActiveRentals = ptr(int32(active.Count))
+	v.status.CostCentsPerHour = ptr(int64(active.CostPerHourCents))
 	v.status.LastChecked = &now
 	v.status.ObservedGeneration = gen
 	apimeta.SetStatusCondition(&v.status.Conditions, metav1.Condition{
@@ -293,10 +299,23 @@ func configOfRental(cluster bool) handler.MapFunc {
 	}
 }
 
+// configChanged passes every config event except an update that leaves the
+// spec alone and does not start a deletion. The reconcile writes status after
+// every read of the account. Without this filter that write would trigger
+// another reconcile, and so another read, until two passes landed in the same
+// second.
+var configChanged = predicate.Funcs{
+	UpdateFunc: func(e event.UpdateEvent) bool {
+		return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() ||
+			e.ObjectOld.GetDeletionTimestamp().IsZero() != e.ObjectNew.GetDeletionTimestamp().IsZero()
+	},
+}
+
 // rentalUsageChanged passes GPURental events that change whether it uses its
-// config: created, deleted, being deleted, or turned into a terminated
-// record. Routine status updates (every poll) are dropped, because each
-// config reconcile also reads the balance.
+// config or what the account spends: created, deleted, being deleted, rented
+// (a create succeeded) or turned into a terminated record. Each of these also
+// re-reads the account's balance and active rentals. Routine status updates
+// (every poll) are dropped.
 var rentalUsageChanged = predicate.Funcs{
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		oldGR, okOld := e.ObjectOld.(*hypv1alpha1.GPURental)
@@ -305,6 +324,7 @@ var rentalUsageChanged = predicate.Funcs{
 			return false
 		}
 		return oldGR.DeletionTimestamp.IsZero() != newGR.DeletionTimestamp.IsZero() ||
-			(oldGR.Status.TerminatedAt == nil) != (newGR.Status.TerminatedAt == nil)
+			(oldGR.Status.TerminatedAt == nil) != (newGR.Status.TerminatedAt == nil) ||
+			(oldGR.Status.RentalID == "") != (newGR.Status.RentalID == "")
 	},
 }

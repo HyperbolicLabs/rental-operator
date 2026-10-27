@@ -26,6 +26,10 @@ spec:
       jsonPath: .status.balanceCents
       name: Balance
       type: integer
+    - description: Hourly cost of the account's active rentals in cents
+      jsonPath: .status.costCentsPerHour
+      name: Cents/Hr
+      type: integer
     - jsonPath: .status.managedRentals
       name: Rentals
       type: integer
@@ -166,6 +170,12 @@ spec:
           status:
             description: status is the observed credential/account state.
             properties:
+              activeRentals:
+                description: |-
+                  ActiveRentals is how many rentals the account has active, including
+                  rentals started outside this cluster, as Hyperbolic reports it.
+                format: int32
+                type: integer
               balanceCents:
                 description: BalanceCents is the account balance in cents, from the
                   last check.
@@ -233,9 +243,16 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              costCentsPerHour:
+                description: |-
+                  CostCentsPerHour is the combined hourly cost of the account's active
+                  rentals in cents, as Hyperbolic reports it.
+                format: int64
+                type: integer
               lastChecked:
-                description: LastChecked is when the credential was last validated
-                  against the API.
+                description: |-
+                  LastChecked is when the credential, balance and active rentals were last
+                  read from the API.
                 format: date-time
                 type: string
               managedRentals:

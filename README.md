@@ -67,7 +67,7 @@ The operator runs a controller in your cluster that consumes the Hyperbolic publ
 
 Three custom resources:
 
-- **`ProviderConfig`** — points at the `Secret` holding your API key, validates it, and reports your account balance.
+- **`ProviderConfig`** — points at the `Secret` holding your API key, validates it, and reports your account's balance and active rentals as Hyperbolic reports them.
 - **`GPURental`** — one object == one on-demand rental. The operator creates it, polls it to Running, publishes SSH/IP details on status, and terminates it on delete via a finalizer.
 - **`GPUAvailability`** — a filtered, always-fresh view of what your account can rent. A shared per-account cache queries the catalogue once per interval and populates every `GPUAvailability` for that account, so adding more of them costs no extra API calls.
 
@@ -139,8 +139,8 @@ GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignor
 
    ```console
    $ kubectl get providerconfig default
-   NAME      ENDPOINT                     BALANCE   READY   AGE
-   default   https://api.hyperbolic.ai    124035    True    5s
+   NAME      ENDPOINT                    BALANCE   CENTS/HR   RENTALS   READY   AGE
+   default   https://api.hyperbolic.ai   124035    0          0         True    5s
    ```
 
 3. **Rent GPUs:**
@@ -188,6 +188,8 @@ GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignor
 | `spec.credentials.secretRef.key` | string | Key within the Secret. Default `api-key`. |
 | `spec.endpoint` | string | API base URL. Default `https://api.hyperbolic.ai`. Must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1` or `::1` test servers. |
 | `status.balanceCents` | int | Account balance (cents) at last check. |
+| `status.activeRentals` | int | Rentals active on the account, including ones started outside this cluster, from Hyperbolic's active rental summary. |
+| `status.costCentsPerHour` | int | Combined hourly cost (cents) of those rentals, from the same summary. |
 | `status.managedRentals` | int | GPURentals using this config that have not finished. While above zero, deleting the config waits (finalizer `compute.hyperbolic.ai/in-use`), so its credentials outlive the rentals they pay for. |
 | `status.conditions[]` | condition | `Ready`, `Authenticated`. |
 
