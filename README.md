@@ -415,7 +415,7 @@ The tag is the single source of truth for the version — the committed `Chart.y
 - **SSH keys are not managed by the operator.** Rentals use the SSH key registered on your Hyperbolic account (via the dashboard). Register one before renting. Per-rental keys aren't expressible in the public API today.
 - **On-demand only.** Reserved-term rentals (prepaid commitments) are out of scope.
 - **Ports are immutable** after creation and supported only in forge regions.
-- **Polling.** The API has no push notifications, so status is poll-driven (≈10s while pending, ≈60s once running).
+- **Polling.** The API has no push notifications, so status is poll-driven (≈10s while pending, ≈60s once running). All GPURentals on one account share a single list of rentals per interval, so a hundred rentals cost the same API budget as one.
 
 ## Contributing
 
