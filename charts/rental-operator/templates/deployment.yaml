@@ -40,6 +40,9 @@ spec:
             {{- if .Values.leaderElection.enabled }}
             - --leader-elect
             {{- end }}
+            {{- with .Values.watchNamespaces }}
+            - --watch-namespaces={{ join "," . }}
+            {{- end }}
           ports:
             - name: health
               containerPort: {{ .Values.healthProbePort }}

@@ -118,9 +118,13 @@ verify: manifests generate ## Fail if generated code, manifests, chart CRDs or g
 	go mod tidy -diff
 
 .PHONY: helm-lint
-helm-lint: ## Lint the Helm chart and check that it renders.
+helm-lint: ## Lint the Helm chart and check that it renders in both install modes.
 	helm lint charts/rental-operator
+	helm lint charts/rental-operator --set 'watchNamespaces={team-a,team-b}'
 	helm template rental-operator charts/rental-operator > /dev/null
+	@helm template rental-operator charts/rental-operator --set 'watchNamespaces={team-a,team-b}' \
+		| grep -Eq '^kind: Cluster(Role|RoleBinding)$$' \
+		&& { echo "namespaced install must not create cluster-wide RBAC"; exit 1; } || true
 
 .PHONY: vulncheck
 vulncheck: govulncheck ## Scan dependencies and the standard library for known vulnerabilities.

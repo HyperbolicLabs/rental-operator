@@ -35,3 +35,26 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- $tag := .Values.image.tag | default .Chart.AppVersion -}}
 {{- printf "%s:%s" .Values.image.repository $tag -}}
 {{- end -}}
+
+{{/*
+The manager's permissions: its CRDs, the Secrets holding API keys, and
+events on GPURentals. Granted cluster-wide, or per watched namespace.
+*/}}
+{{- define "rental-operator.managerRules" -}}
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [get, list, watch]
+# Events on GPURentals (termination progress and how to get unstuck).
+- apiGroups: [""]
+  resources: [events]
+  verbs: [create, patch]
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [gpurentals, providerconfigs, gpuavailabilities]
+  verbs: [create, delete, get, list, patch, update, watch]
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [gpurentals/finalizers, providerconfigs/finalizers]
+  verbs: [update]
+- apiGroups: [compute.hyperbolic.ai]
+  resources: [gpurentals/status, providerconfigs/status, gpuavailabilities/status]
+  verbs: [get, patch, update]
+{{- end }}
