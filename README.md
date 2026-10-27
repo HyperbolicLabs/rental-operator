@@ -97,6 +97,16 @@ helm install rental-operator ./charts/rental-operator \
 
 This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By default the operator watches all namespaces.
 
+**Namespaced install (least privilege).** By default the operator gets a `ClusterRole`, and Kubernetes RBAC can't limit Secret access by label, so it is allowed to read Secrets in every namespace (it only ever reads labeled ones). To keep it out of everything else, list the namespaces it should manage. The chart then installs a `Role` in each of them and no cluster-wide permissions at all:
+
+```console
+helm install rental-operator ./charts/rental-operator \
+  --namespace rental-operator-system --create-namespace \
+  --set 'watchNamespaces={ml-team,research}'
+```
+
+GPURentals, ProviderConfigs and their Secrets in other namespaces are then ignored.
+
 > The chart ships the CRDs under `charts/rental-operator/crds/`. Helm installs CRDs on first install but does **not** upgrade them; on a chart upgrade that changes the CRDs, re-apply them with `kubectl apply -f charts/rental-operator/crds/`.
 
 ## Quickstart
