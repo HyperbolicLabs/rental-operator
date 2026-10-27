@@ -37,6 +37,7 @@ import (
 
 	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/metrics"
 )
 
 const (
@@ -94,6 +95,8 @@ type GPURentalReconciler struct {
 	// ClusterResourceNamespace is the operator's own namespace, where
 	// ClusterProviderConfig Secrets live.
 	ClusterResourceNamespace string
+	// Metrics records create and terminate outcomes. Optional.
+	Metrics *metrics.Recorder
 	// Rentals shares one list of active rentals per account among all
 	// GPURentals. Optional, and nil lists on every poll.
 	Rentals *RentalCache
@@ -301,6 +304,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 
 	row, err := hc.Rentals.Create(ctx, req)
 	r.Rentals.Invalidate(creds.key()) // whatever happened, the account's list may have changed
+	r.Metrics.RentalCreated(err)
 	if hyperbolic.IsOutcomeUnknown(err) {
 		// The rental may exist. Keep create-pending and look it up by label on
 		// the next reconcile instead of retrying the create.

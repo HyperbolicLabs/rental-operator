@@ -130,9 +130,18 @@ helm-lint: ## Lint the Helm chart and check that it renders in both install mode
 	helm lint charts/rental-operator
 	helm lint charts/rental-operator --set 'watchNamespaces={team-a,team-b}'
 	helm template rental-operator charts/rental-operator > /dev/null
-	@helm template rental-operator charts/rental-operator --set 'watchNamespaces={team-a,team-b}' \
+	helm lint charts/rental-operator --set metrics.enabled=true --set metrics.serviceMonitor.enabled=true \
+		--set metrics.prometheusRule.enabled=true
+	@helm template rental-operator charts/rental-operator --set metrics.enabled=true --set metrics.serviceMonitor.enabled=true \
+		| grep -q 'honorLabels: true' || { echo "the ServiceMonitor must honor the metrics' namespace labels"; exit 1; }
+	@helm template rental-operator charts/rental-operator --set 'watchNamespaces={team-a,team-b}' --set metrics.enabled=true \
 		| perl -0777 -ne 'for (split /^---$$/m) { exit 1 if /^kind: ClusterRole$$/m && /secrets/ }' \
 		|| { echo "namespaced install must not grant cluster-wide Secret access"; exit 1; }
+
+.PHONY: test-alerts
+test-alerts: promtool ## Check the chart's alert rules and run their unit tests.
+	$(PROMTOOL) check rules charts/rental-operator/files/alerts.yaml
+	$(PROMTOOL) test rules test/prometheus/alerts_test.yaml
 
 .PHONY: vulncheck
 vulncheck: govulncheck ## Scan dependencies and the standard library for known vulnerabilities.
@@ -240,6 +249,7 @@ GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
 CRDIFY ?= $(LOCALBIN)/crdify
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
+PROMTOOL ?= $(LOCALBIN)/promtool
 
 ## Tool Versions
 # renovate: datasource=go depName=sigs.k8s.io/kustomize/kustomize/v5
@@ -258,6 +268,9 @@ GOVULNCHECK_VERSION ?= v1.9.0
 CRDIFY_VERSION ?= v0.6.0
 # renovate: datasource=go depName=github.com/elastic/crd-ref-docs
 CRD_REF_DOCS_VERSION ?= v0.3.0
+# promtool comes from this Prometheus release (it cannot be go-installed).
+# renovate: datasource=github-releases depName=prometheus/prometheus
+PROMETHEUS_VERSION ?= v3.15.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -305,6 +318,22 @@ $(CRDIFY): $(LOCALBIN)
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
 	$(call go-install-tool,$(CRD_REF_DOCS),github.com/elastic/crd-ref-docs,$(CRD_REF_DOCS_VERSION))
+
+.PHONY: promtool
+promtool: $(PROMTOOL) ## Download promtool locally if necessary.
+$(PROMTOOL): $(LOCALBIN)
+	@[ -f "$(PROMTOOL)-$(PROMETHEUS_VERSION)" ] || { \
+	set -e; v=$(PROMETHEUS_VERSION:v%=%); dist=prometheus-$$v.$$(go env GOOS)-$$(go env GOARCH); \
+	tmp=$$(mktemp -d); trap 'rm -rf "$$tmp"' EXIT; \
+	url=https://github.com/prometheus/prometheus/releases/download/$(PROMETHEUS_VERSION); \
+	echo "Downloading $$dist promtool"; \
+	curl -fsSLo "$$tmp/$$dist.tar.gz" "$$url/$$dist.tar.gz"; \
+	curl -fsSLo "$$tmp/sha256sums.txt" "$$url/sha256sums.txt"; \
+	(cd "$$tmp" && grep " $$dist.tar.gz$$" sha256sums.txt | shasum -a 256 -c -); \
+	tar -xzf "$$tmp/$$dist.tar.gz" -C "$$tmp" "$$dist/promtool"; \
+	mv "$$tmp/$$dist/promtool" "$(PROMTOOL)-$(PROMETHEUS_VERSION)"; \
+	}; \
+	ln -sf "$$(realpath "$(PROMTOOL)-$(PROMETHEUS_VERSION)")" $(PROMTOOL)
 
 define go-install-tool
 @[ -f "$(1)-$(3)" ] && [ "$$(readlink -- "$(1)" 2>/dev/null)" = "$(1)-$(3)" ] || { \

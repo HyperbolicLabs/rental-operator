@@ -6,6 +6,7 @@
 | [Install, upgrade and uninstall](install.md) | Prerequisites, cluster-wide and namespaced installs, verifying a release, CRD upgrades, removing the operator safely. |
 | [Custom resources](resources.md) | Every field of ProviderConfig, ClusterProviderConfig, GPURental and GPUAvailability, with their conditions and reasons. |
 | [Common operations](operations.md) | Regions, ports, terminating, orphaning, rebooting. |
+| [Observability](observability.md) | Metrics, alerts and how to scrape them. |
 | [API reference](reference/api.md) | Every field of every kind, generated from the Go types (`make api-docs`). |
 | [API versioning](api-versioning.md) | What each API version promises, how the API graduates, and how to upgrade across versions. |
 | [Development](development.md) | Running the operator locally. |

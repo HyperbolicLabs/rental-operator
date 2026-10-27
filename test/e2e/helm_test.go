@@ -21,6 +21,7 @@ package e2e
 import (
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,9 +43,25 @@ var _ = Describe("Helm chart", Ordered, func() {
 		rentalName  = "train-run-42"
 		configName  = "default"
 		serviceAcct = "system:serviceaccount:" + chartNS + ":" + release
+		// A pod in sampleNS scrapes the metrics endpoint as scraperSA.
+		scraperSA      = "metrics-scraper"
+		scraperPod     = "scrape-metrics"
+		scraperBinding = "rental-operator-e2e-metrics-scraper"
 	)
 	controllers := []string{"providerconfig", "clusterproviderconfig", "gpurental", "gpuavailability"}
 	samples := []string{"config/samples/v1alpha1_providerconfig.yaml", "config/samples/v1alpha1_gpurental.yaml"}
+	// deleteSamples deletes the rental before its config: the config's in-use
+	// finalizer holds it while a rental uses it.
+	deleteSamples := func(extra ...string) {
+		GinkgoHelper()
+		for i := len(samples) - 1; i >= 0; i-- {
+			args := append([]string{"delete", "-f", samples[i], "--timeout=60s"}, extra...)
+			out, err := utils.Run(exec.Command("kubectl", args...))
+			if !slices.Contains(extra, "--ignore-not-found") {
+				Expect(err).NotTo(HaveOccurred(), out)
+			}
+		}
+	}
 
 	run := func(name string, args ...string) string {
 		GinkgoHelper()
@@ -114,9 +131,9 @@ var _ = Describe("Helm chart", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		for _, s := range samples {
-			_, _ = utils.Run(exec.Command("kubectl", "delete", "-f", s, "--ignore-not-found", "--timeout=60s"))
-		}
+		deleteSamples("--ignore-not-found")
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "pod", scraperPod, "-n", sampleNS, "--ignore-not-found"))
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "clusterrolebinding", scraperBinding, "--ignore-not-found"))
 		_, _ = utils.Run(exec.Command("helm", "uninstall", release, "-n", chartNS, "--wait"))
 		// Helm leaves CRDs in place.
 		_, _ = utils.Run(exec.Command("kubectl", "delete", "-f", "charts/rental-operator/crds/", "--ignore-not-found"))
@@ -164,5 +181,61 @@ var _ = Describe("Helm chart", Ordered, func() {
 
 	It("reconciles a GPURental in a watched namespace", func() {
 		expectSampleReconciled()
+	})
+
+	// scrape fetches the metrics endpoint from a pod, with token as the
+	// bearer token when it is set, and returns curl's output.
+	scrape := func(g Gomega, token, curlArgs string) string {
+		_, _ = utils.Run(exec.Command("kubectl", "delete", "pod", scraperPod, "-n", sampleNS, "--ignore-not-found", "--wait"))
+		auth := ""
+		if token != "" {
+			auth = fmt.Sprintf("-H 'Authorization: Bearer %s' ", token)
+		}
+		url := fmt.Sprintf("https://%s-metrics.%s.svc:8443/metrics", release, chartNS)
+		_, err := utils.Run(exec.Command("kubectl", "run", scraperPod, "-n", sampleNS, "--restart=Never",
+			"--image=curlimages/curl:latest", "--command", "--", "/bin/sh", "-c",
+			fmt.Sprintf("curl -sk %s%s %s", auth, curlArgs, url)))
+		g.Expect(err).NotTo(HaveOccurred())
+		g.Eventually(func() string {
+			out, _ := utils.Run(exec.Command("kubectl", "get", "pod", scraperPod, "-n", sampleNS,
+				"-o", "jsonpath={.status.phase}"))
+			return out
+		}, time.Minute, time.Second).Should(Equal("Succeeded"))
+		out, err := utils.Run(exec.Command("kubectl", "logs", scraperPod, "-n", sampleNS))
+		g.Expect(err).NotTo(HaveOccurred())
+		return out
+	}
+
+	It("serves the operator's metrics only to an authorized scraper", func() {
+		run("helm", "upgrade", release, "./charts/rental-operator", "-n", chartNS, "--reuse-values",
+			"--set", "metrics.enabled=true", "--wait", "--timeout=3m")
+		expectControllersStarted()
+		for _, s := range samples {
+			run("kubectl", "apply", "-f", s)
+		}
+
+		By("refusing a request without a token")
+		Eventually(func(g Gomega) {
+			g.Expect(scrape(g, "", "-o /dev/null -w '%{http_code}'")).To(Equal("401"))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		By("serving a service account bound to the metrics-reader ClusterRole")
+		run("kubectl", "create", "serviceaccount", scraperSA, "-n", sampleNS)
+		run("kubectl", "create", "clusterrolebinding", scraperBinding,
+			"--clusterrole="+release+"-metrics-reader", "--serviceaccount="+sampleNS+":"+scraperSA)
+		token := strings.TrimSpace(run("kubectl", "create", "token", scraperSA, "-n", sampleNS))
+		Eventually(func(g Gomega) {
+			out := scrape(g, token, "")
+			g.Expect(out).To(ContainSubstring(fmt.Sprintf(
+				`rental_operator_gpurental_status{name=%q,namespace=%q,phase="Blocked",reason="CredentialError"} 1`,
+				rentalName, sampleNS)))
+			g.Expect(out).To(ContainSubstring(fmt.Sprintf(
+				`rental_operator_providerconfig_managed_rentals{kind="ProviderConfig",name=%q,namespace=%q}`,
+				configName, sampleNS)))
+			g.Expect(out).To(ContainSubstring(`rental_operator_rental_operations_total{operation="create",result="success"} 0`))
+			g.Expect(out).To(ContainSubstring("controller_runtime_reconcile_total"))
+		}, 3*time.Minute, 5*time.Second).Should(Succeed())
+
+		deleteSamples()
 	})
 })

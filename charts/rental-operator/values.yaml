@@ -36,10 +36,28 @@ resources:
 # Probe port (matches the manager's --health-probe-bind-address).
 healthProbePort: 8081
 
-# Metrics are disabled by default (manager --metrics-bind-address=0). Set an
-# address like ":8080" to enable an HTTP metrics endpoint (insecure).
+# Prometheus metrics and alerts. docs/observability.md lists every metric and
+# alert, and how to scrape them.
 metrics:
-  bindAddress: "0"
+  # Serve metrics through a Service named <fullname>-metrics.
+  enabled: false
+  port: 8443
+  # Serve HTTPS and answer only requests whose bearer token may GET /metrics:
+  # bind the <fullname>-metrics-reader ClusterRole to your Prometheus service
+  # account. false serves plain HTTP to anyone who can reach the pod.
+  secure: true
+  # A ServiceMonitor for the Prometheus Operator (needs its CRDs).
+  serviceMonitor:
+    enabled: false
+    interval: 60s
+    # Labels your Prometheus selects ServiceMonitors by, for example
+    # release: kube-prometheus-stack.
+    labels: {}
+  # The alert rules in files/alerts.yaml as a PrometheusRule (needs the
+  # Prometheus Operator CRDs).
+  prometheusRule:
+    enabled: false
+    labels: {}
 
 podAnnotations: {}
 podLabels: {}

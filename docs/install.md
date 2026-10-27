@@ -31,7 +31,7 @@ helm install rental-operator ./charts/rental-operator \
   --namespace rental-operator-system --create-namespace
 ```
 
-This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By default the operator watches all namespaces. Check that it started:
+This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By default the operator watches all namespaces, and serves no metrics. See [Observability](observability.md) to turn them on. Check that it started:
 
 ```console
 kubectl -n rental-operator-system rollout status deploy/rental-operator
