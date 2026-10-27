@@ -8,4 +8,4 @@
 | [Common operations](operations.md) | Regions, ports, terminating, orphaning, rebooting. |
 | [Development](development.md) | Running the operator locally and cutting a release. |
 
-Also at the repository root: [ROADMAP.md](../ROADMAP.md), [CONTRIBUTING.md](../CONTRIBUTING.md) and [SECURITY.md](../SECURITY.md).
+Also at the repository root: [SUPPORT.md](../SUPPORT.md), [ROADMAP.md](../ROADMAP.md), [CONTRIBUTING.md](../CONTRIBUTING.md) and [SECURITY.md](../SECURITY.md).
