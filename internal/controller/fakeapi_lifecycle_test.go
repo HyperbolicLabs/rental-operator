@@ -74,7 +74,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 	It("validates a ProviderConfig and reports the account as the API does", func() {
 		acct := newFakeAccount(ctx)
 		acct.api.SetBalance(12_345, 500)
-		r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
+		r := newConfigReconciler()
 		key := client.ObjectKey{Namespace: acct.namespace, Name: acct.config.Name}
 
 		reconcileOnce(ctx, r, key)
@@ -121,7 +121,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 		Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: acct.namespace, Name: "hyperbolic-key"}, secret)).To(Succeed())
 		secret.Data["api-key"] = []byte("sk_test_revoked")
 		Expect(k8sClient.Update(ctx, secret)).To(Succeed())
-		r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
+		r := newConfigReconciler()
 		key := client.ObjectKey{Namespace: acct.namespace, Name: acct.config.Name}
 
 		reconcileOnce(ctx, r, key)
@@ -141,10 +141,7 @@ var _ = Describe("Against the fake Hyperbolic API", func() {
 			Spec:       hypv1alpha1.GPUAvailabilitySpec{ProviderConfigRef: acct.config, GPUType: "h100"},
 		}
 		Expect(k8sClient.Create(ctx, ga)).To(Succeed())
-		r := &GPUAvailabilityReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(),
-			Catalog: NewCatalogCache(0), NewClient: testClientFactory,
-		}
+		r := newAvailabilityReconciler(0)
 
 		reconcileOnce(ctx, r, client.ObjectKeyFromObject(ga))
 

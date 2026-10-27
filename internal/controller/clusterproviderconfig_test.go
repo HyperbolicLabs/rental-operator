@@ -29,6 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/scope"
 )
 
 // clusterAccount is a ClusterProviderConfig whose Secret lives in an
@@ -188,10 +189,8 @@ var _ = Describe("ClusterProviderConfig", func() {
 			Spec:       hypv1alpha1.GPUAvailabilitySpec{ProviderConfigRef: acct.config},
 		}
 		Expect(k8sClient.Create(ctx, ga)).To(Succeed())
-		r := &GPUAvailabilityReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(), Catalog: NewCatalogCache(0),
-			NewClient: testClientFactory, ClusterResourceNamespace: acct.operatorNS,
-		}
+		r := newAvailabilityReconciler(0)
+		r.ClusterResourceNamespace = acct.operatorNS
 		reconcileOnce(ctx, r, client.ObjectKeyFromObject(ga))
 		Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(ga), ga)).To(Succeed())
 		Expect(ga.Status.Offerings).NotTo(BeEmpty())
@@ -199,7 +198,7 @@ var _ = Describe("ClusterProviderConfig", func() {
 })
 
 var _ = It("caches ClusterProviderConfig Secrets in the operator's namespace in a namespaced install", func() {
-	opts := ManagerCacheOptions([]string{"ml"}, "rental-operator-system")
+	opts := scope.CacheOptions([]string{"ml"}, "rental-operator-system")
 	for obj, byObject := range opts.ByObject {
 		if _, isSecret := obj.(*corev1.Secret); isSecret {
 			Expect(byObject.Namespaces).To(HaveKey("ml"))

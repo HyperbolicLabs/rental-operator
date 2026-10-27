@@ -18,23 +18,28 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	"github.com/HyperbolicLabs/hyperbolic-go/hyperbolictest"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 // testClientFactory builds API clients the way the manager does, recording
 // their requests in testMetrics.
-var testClientFactory = NewClientFactory("rental-operator/test", testMetrics.Transport(nil))
+var testClientFactory = account.NewClientFactory("rental-operator/test", testMetrics.Transport(nil))
 
 // fakeAccount is a namespace wired to an in-memory Hyperbolic API: a Secret
 // holding the fake's API key and a ProviderConfig pointing at the fake.
@@ -91,14 +96,49 @@ func (a *fakeAccount) rental(name string) *hypv1alpha1.GPURental {
 // whichever fake API a ProviderConfig points at.
 func newRentalReconciler() *GPURentalReconciler {
 	return &GPURentalReconciler{
-		Client:      k8sClient,
-		Scheme:      k8sClient.Scheme(),
-		Catalog:     NewCatalogCache(time.Minute),
-		NewClient:   testClientFactory,
-		Credentials: NewCredentialMemory(),
-		Metrics:     testMetrics,
+		Client:        k8sClient,
+		Scheme:        k8sClient.Scheme(),
+		NewClient:     testClientFactory,
+		RentalOptions: account.NewRentalOptionsCache(time.Minute),
+		Rentals:       account.NewRentalCache(alwaysLater{}),
+		Credentials:   account.NewCredentialsMemory(),
+		Clock:         clock.RealClock{},
+		Recorder:      &record.FakeRecorder{},
+		Metrics:       testMetrics,
+		APIReader:     k8sClient,
 	}
 }
+
+// newConfigReconciler returns a ProviderConfigReconciler wired to envtest
+// and to whichever fake API a ProviderConfig points at. Its APIReader is
+// unset, as when the operator cannot read around its cache.
+func newConfigReconciler() *ProviderConfigReconciler {
+	return &ProviderConfigReconciler{
+		Client:    k8sClient,
+		Scheme:    k8sClient.Scheme(),
+		NewClient: testClientFactory,
+	}
+}
+
+// newAvailabilityReconciler returns a GPUAvailabilityReconciler wired to
+// envtest, with a rental-options cache that lasts ttl.
+func newAvailabilityReconciler(ttl time.Duration) *GPUAvailabilityReconciler {
+	return &GPUAvailabilityReconciler{
+		Client:        k8sClient,
+		Scheme:        k8sClient.Scheme(),
+		NewClient:     testClientFactory,
+		RentalOptions: account.NewRentalOptionsCache(ttl),
+	}
+}
+
+// alwaysLater is a clock on which every cached rental list is already
+// stale: every poll in these tests comes after the refresh interval, so the
+// fake API's latest state is always read. The cache's own specs use a fake
+// clock instead.
+type alwaysLater struct{}
+
+func (alwaysLater) Now() time.Time                  { return time.Now() }
+func (alwaysLater) Since(t time.Time) time.Duration { return time.Since(t) + 24*time.Hour }
 
 // createRental creates gr and reconciles it until the fake API holds its
 // rental (finalizer, then create). It returns the object's key and the
@@ -120,4 +160,31 @@ func reconcileOnce(ctx context.Context, r reconcile.Reconciler, key types.Namesp
 	res, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: key})
 	Expect(err).NotTo(HaveOccurred())
 	return res
+}
+
+// rentalOptions turns option literals into the API's rental options, keeping
+// each literal's machineType, so bare-metal entries can test the filters.
+func rentalOptions(vms []hyperbolic.VirtualMachineOption) []hyperbolic.RentalOption {
+	out := make([]hyperbolic.RentalOption, len(vms))
+	for i, vm := range vms {
+		b, err := json.Marshal(vm)
+		if err == nil {
+			err = out[i].UnmarshalJSON(b)
+		}
+		if err != nil {
+			panic(err)
+		}
+	}
+	return out
+}
+
+// h100x1 asks for one H100 virtual machine in us-central-1, labeled label.
+func h100x1(label string) hyperbolic.CreateRentalParams {
+	return hyperbolic.CreateRentalParams{
+		RentalType: hyperbolic.RentalTypeVirtualMachine,
+		GPUType:    hyperbolic.Ptr(hyperbolic.GPUTypeH100),
+		GPUCount:   1,
+		Region:     hyperbolic.Ptr("us-central-1"),
+		Label:      &label,
+	}
 }

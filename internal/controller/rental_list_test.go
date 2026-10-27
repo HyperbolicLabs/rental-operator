@@ -31,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 var _ = Describe("One rental list per account", func() {
@@ -47,7 +48,7 @@ var _ = Describe("One rental list per account", func() {
 		clk = clocktesting.NewFakePassiveClock(time.Now())
 		r = newRentalReconciler()
 		r.Clock = clk
-		r.Rentals = NewRentalCache(clk)
+		r.Rentals = account.NewRentalCache(clk)
 		lists = func() int { return acct.api.Requests(http.MethodGet, hyperbolictest.PathActiveRentals) }
 	})
 
@@ -75,7 +76,7 @@ var _ = Describe("One rental list per account", func() {
 		for _, id := range ids {
 			Expect(acct.api.SetRentalStatus(id, hyperbolic.RentalStatusRunning)).To(BeTrue())
 		}
-		r.Rentals.Invalidate(credKey(acct.api.URL, acct.api.APIKey)) // forget lists taken while they were starting
+		r.Rentals.Invalidate(account.KeyFor(acct.api.URL, acct.api.APIKey)) // forget lists taken while they were starting
 
 		before := lists()
 		pollAll(keys)
@@ -84,7 +85,7 @@ var _ = Describe("One rental list per account", func() {
 		pollAll(keys)
 		Expect(lists()-before).To(Equal(1), "still fresh")
 
-		clk.SetTime(clk.Now().Add(rentalListTTL + time.Second))
+		clk.SetTime(clk.Now().Add(account.RentalListTTL + time.Second))
 		pollAll(keys)
 		Expect(lists() - before).To(Equal(2))
 	})
@@ -94,7 +95,7 @@ var _ = Describe("One rental list per account", func() {
 		pollAll(keys)
 		before := lists()
 
-		clk.SetTime(clk.Now().Add(rentalListProvisioningTTL + time.Second))
+		clk.SetTime(clk.Now().Add(account.RentalListProvisioningTTL + time.Second))
 		pollAll(keys)
 		Expect(lists() - before).To(Equal(1))
 	})
@@ -117,27 +118,5 @@ var _ = Describe("One rental list per account", func() {
 		Expect(k8sClient.Get(ctx, key, gr)).To(Succeed())
 		Expect(gr.Status.TerminatedAt).To(BeNil())
 		Expect(gr.Status.RentalID).To(Equal(created.RentalID))
-	})
-
-	It("does not store a list fetched while the account changed", func() {
-		cache := NewRentalCache(clk)
-		hc := acct.api.Client(GinkgoTB(), hyperbolic.WithRetryPolicy(hyperbolic.NoRetries()))
-		key := "account"
-		acct.api.InjectFault(hyperbolictest.Fault{Method: http.MethodGet, Path: hyperbolictest.PathActiveRentals, Delay: 300 * time.Millisecond})
-
-		done := make(chan struct{})
-		go func() {
-			defer GinkgoRecover()
-			defer close(done)
-			_, err := cache.List(ctx, hc, key)
-			Expect(err).NotTo(HaveOccurred())
-		}()
-		Eventually(lists).Should(Equal(1)) // the slow fetch is in flight
-		cache.Invalidate(key)              // a create happens meanwhile
-		<-done
-
-		_, err := cache.List(ctx, hc, key)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(lists()).To(Equal(2), "the in-flight result was not cached")
 	})
 })

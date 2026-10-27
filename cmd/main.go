@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -38,8 +39,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	computev1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 	"github.com/HyperbolicLabs/rental-operator/internal/controller"
 	opmetrics "github.com/HyperbolicLabs/rental-operator/internal/metrics"
+	"github.com/HyperbolicLabs/rental-operator/internal/scope"
 	"github.com/HyperbolicLabs/rental-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
@@ -167,14 +170,14 @@ func main() {
 		metricsServerOptions.KeyName = metricsCertKey
 	}
 
-	namespaces := controller.ParseWatchNamespaces(watchNamespaces)
+	namespaces := scope.ParseNamespaces(watchNamespaces)
 	if len(namespaces) > 0 {
 		setupLog.Info("watching only these namespaces", "namespaces", namespaces)
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Cache:                  controller.ManagerCacheOptions(namespaces, clusterResourceNamespace),
+		Cache:                  scope.CacheOptions(namespaces, clusterResourceNamespace),
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
@@ -197,30 +200,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Shared per-credential catalogue cache: memoizes rental-options per account
-	// so the operator calls castle once per account per interval, no matter how
-	// many GPUAvailability/GPURental objects consume it.
-	catalog := controller.NewCatalogCache(catalogRefresh)
-	// Every API request names the operator and SDK versions in its User-Agent,
-	// so adoption can be measured server-side without client telemetry.
+	// One rental-options list and one rental list per account, shared by
+	// every object that reads them, whatever their number.
+	rentalOptions := account.NewRentalOptionsCache(catalogRefresh)
+	rentals := account.NewRentalCache(clock.RealClock{})
 	// The operator's own metrics are served next to controller-runtime's.
-	// Every API request goes through the recorder's transport.
-	recorder := opmetrics.NewRecorder()
-	if err := recorder.Register(metrics.Registry); err != nil {
+	operatorMetrics := opmetrics.NewRecorder()
+	if err := operatorMetrics.Register(metrics.Registry); err != nil {
 		setupLog.Error(err, "unable to register metrics")
 		os.Exit(1)
 	}
 	metrics.Registry.MustRegister(opmetrics.NewStatusCollector(mgr.GetCache()))
-	newClient := controller.NewClientFactory("rental-operator/"+version.Version, recorder.Transport(nil))
+	// Every API request names the operator and SDK versions in its
+	// User-Agent, so adoption can be measured server-side without client
+	// telemetry, and goes through operatorMetrics' transport.
+	newClient := account.NewClientFactory("rental-operator/"+version.Version, operatorMetrics.Transport(nil))
 
 	if err := (&controller.GPURentalReconciler{
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
-		Catalog:                  catalog,
+		RentalOptions:            rentalOptions,
 		NewClient:                newClient,
-		Credentials:              controller.NewCredentialMemory(),
-		Rentals:                  controller.NewRentalCache(nil),
-		Metrics:                  recorder,
+		Credentials:              account.NewCredentialsMemory(),
+		Rentals:                  rentals,
+		Clock:                    clock.RealClock{},
+		Metrics:                  operatorMetrics,
 		Recorder:                 mgr.GetEventRecorderFor("gpurental-controller"),
 		APIReader:                mgr.GetAPIReader(),
 		ClusterResourceNamespace: clusterResourceNamespace,
@@ -250,7 +254,7 @@ func main() {
 	if err := (&controller.GPUAvailabilityReconciler{
 		Client:                   mgr.GetClient(),
 		Scheme:                   mgr.GetScheme(),
-		Catalog:                  catalog,
+		RentalOptions:            rentalOptions,
 		RefreshInterval:          catalogRefresh,
 		NewClient:                newClient,
 		APIReader:                mgr.GetAPIReader(),

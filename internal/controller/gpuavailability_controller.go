@@ -32,6 +32,7 @@ import (
 
 	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 // catalogRetry is the requeue delay while the catalogue can't be fetched.
@@ -39,22 +40,34 @@ const catalogRetry = 15 * time.Second
 
 // GPUAvailabilityReconciler projects the account's catalogue onto a
 // GPUAvailability's status, filtered by its spec. It reads through the shared
-// per-credential CatalogCache, so N objects on one account cost one API call
+// per-account RentalOptionsCache, so N objects on one account cost one API call
 // per refresh interval.
+//
+// Every field is required unless its comment says otherwise.
+// SetupWithManager rejects a reconciler that is missing one.
 type GPUAvailabilityReconciler struct {
 	client.Client
-	Scheme          *runtime.Scheme
-	Catalog         *CatalogCache
+	Scheme *runtime.Scheme
+	// NewClient builds Hyperbolic API clients.
+	NewClient account.ClientFactory
+	// RentalOptions is the shared per-account rental-options cache.
+	RentalOptions *account.RentalOptionsCache
+	// RefreshInterval is how often status is refreshed. Optional: 5m.
 	RefreshInterval time.Duration
-	// NewClient builds Hyperbolic API clients. Optional, and nil uses
-	// NewClientFactory with the operator's version.
-	NewClient ClientFactory
 	// APIReader reads around the cache, to explain a Secret the cache does
-	// not hold (it is not labeled). Optional.
+	// not hold because it is not labeled. Optional.
 	APIReader client.Reader
 	// ClusterResourceNamespace is the operator's own namespace, where
-	// ClusterProviderConfig Secrets live.
+	// ClusterProviderConfig Secrets live. Optional: without it, objects
+	// using a ClusterProviderConfig report that it cannot read its Secret.
 	ClusterResourceNamespace string
+}
+
+// validate checks the reconciler's required dependencies.
+func (r *GPUAvailabilityReconciler) validate() error {
+	return checkDependencies("GPUAvailability", append(apiDependencies(r.Client, r.Scheme, r.NewClient),
+		dependency{"RentalOptions", r.RentalOptions == nil},
+	)...)
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
@@ -70,11 +83,11 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	creds, err := credentialSource{client: r.Client, uncached: r.APIReader, clusterNamespace: r.ClusterResourceNamespace}.
-		forReference(ctx, ga.Namespace, ga.Spec.ProviderConfigRef)
+	creds, err := account.Resolver{Client: r.Client, Uncached: r.APIReader, ClusterNamespace: r.ClusterResourceNamespace}.
+		ForReference(ctx, ga.Namespace, ga.Spec.ProviderConfigRef)
 	if err != nil {
 		reason := hypv1alpha1.ReasonCredentialError
-		if errors.Is(err, errNamespaceNotAllowed) {
+		if errors.Is(err, account.ErrNamespaceNotAllowed) {
 			reason = hypv1alpha1.ReasonNamespaceNotAllowed
 		}
 		r.setReady(&ga, metav1.ConditionFalse, reason, err.Error())
@@ -82,13 +95,13 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.finish(ctx, &ga, apiRetry)
 	}
 
-	hc, err := creds.newClient(r.NewClient)
+	hc, err := creds.Client(r.NewClient)
 	if err != nil {
 		r.setReady(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
 		r.setSynced(&ga, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, err.Error())
 		return r.finish(ctx, &ga, apiRetry)
 	}
-	options, fetchedAt, fetchErr := r.Catalog.Get(ctx, hc, creds.key())
+	options, fetchedAt, fetchErr := r.RentalOptions.Get(ctx, hc, creds.Key())
 	if fetchErr != nil {
 		// With an earlier catalog cached, keep showing it (Ready) but say the
 		// refresh failed (Synced=False) so the offerings are known to be stale.
@@ -146,6 +159,9 @@ func (r *GPUAvailabilityReconciler) finish(ctx context.Context, ga *hypv1alpha1.
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *GPUAvailabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := r.validate(); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypv1alpha1.GPUAvailability{}).
 		Named("gpuavailability").
@@ -156,7 +172,7 @@ func (r *GPUAvailabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // returns matching VM offerings, cheapest first. Pure and unit-testable.
 func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvailabilitySpec) []hypv1alpha1.Offering {
 	out := make([]hypv1alpha1.Offering, 0, len(options))
-	for _, o := range vmOptions(options) {
+	for _, o := range account.VirtualMachineOptions(options) {
 		if spec.GPUType != "" && string(o.GPUType) != spec.GPUType {
 			continue
 		}

@@ -70,7 +70,7 @@ var _ = Describe("GPURental Controller", func() {
 		})
 
 		It("adds the finalizer and records a credential-error condition", func() {
-			r := &GPURentalReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), Catalog: NewCatalogCache(0)}
+			r := newRentalReconciler()
 
 			// First pass installs the finalizer.
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})

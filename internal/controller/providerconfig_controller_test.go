@@ -69,7 +69,7 @@ var _ = Describe("ProviderConfig Controller", func() {
 		})
 
 		It("records a not-ready condition when the Secret is missing", func() {
-			r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme()}
+			r := newConfigReconciler()
 
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())

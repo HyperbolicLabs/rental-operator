@@ -118,10 +118,7 @@ var _ = Describe("GPURental status contract", func() {
 		}
 		Expect(k8sClient.Create(ctx, ga)).To(Succeed())
 		key := client.ObjectKeyFromObject(ga)
-		r := &GPUAvailabilityReconciler{
-			Client: k8sClient, Scheme: k8sClient.Scheme(),
-			Catalog: NewCatalogCache(time.Nanosecond), NewClient: testClientFactory,
-		}
+		r := newAvailabilityReconciler(time.Nanosecond)
 		reconcileOnce(ctx, r, key)
 
 		acct.api.InjectFault(hyperbolictest.Fault{Method: http.MethodGet, Path: hyperbolictest.PathRentalOptions, Status: http.StatusBadGateway})
@@ -138,7 +135,7 @@ var _ = Describe("GPURental status contract", func() {
 
 var _ = DescribeTable("rental status maps to phase and Ready",
 	func(apiStatus, phase string, ready metav1.ConditionStatus, reason string) {
-		r := &GPURentalReconciler{}
+		r := newRentalReconciler()
 		gr := &hypv1alpha1.GPURental{}
 		r.applyRentalToStatus(gr, &hyperbolic.RentalWithStatus{RentalID: "rnt_1", Status: hyperbolic.RentalStatus(apiStatus)})
 		Expect(gr.Status.Phase).To(Equal(phase))
