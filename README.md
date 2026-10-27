@@ -393,15 +393,26 @@ go test ./internal/...
 
 ## Releasing
 
-Releases are cut by publishing a **GitHub Release** with a semver tag (`vX.Y.Z`). Merges to `main` only run lint/tests — they never publish. Publishing a Release triggers `.github/workflows/release.yml`, which:
+Releases are cut with the **Release** workflow, run by hand on `main` and approved by an owner. It checks that lint, tests, verification and the end-to-end tests passed on the commit and chooses the version from the pull request titles since the last release. `make release-version` previews it. It then builds, signs and publishes the image and the chart, and only then creates the tag and the GitHub Release with generated notes and the packaged chart.
 
-1. builds and pushes a multi-arch image (`linux/amd64` + `linux/arm64`) to `ghcr.io/hyperboliclabs/rental-operator:X.Y.Z` (and `:latest`);
-2. packages the Helm chart with `version`/`appVersion` set to the tag (so the chart pulls the matching image) and pushes it to `oci://ghcr.io/hyperboliclabs/charts/rental-operator`;
-3. attaches the packaged `.tgz` to the Release.
+- The image `ghcr.io/hyperboliclabs/rental-operator:X.Y.Z` is built for `linux/amd64` and `linux/arm64`, tagged `latest` unless it is a pre-release, and carries an SPDX SBOM and SLSA build provenance.
+- The chart `oci://ghcr.io/hyperboliclabs/charts/rental-operator` has `version` and `appVersion` set to the release, so it pulls the matching image.
 
-The tag is the single source of truth for the version — the committed `Chart.yaml` version is only a placeholder and is overridden at package time. To release: cut the tag/Release; no manual version bump or image build is needed.
+Both are signed with [cosign](https://docs.sigstore.dev/), keyless, from the release workflow's GitHub identity. To verify before installing:
 
-> One-time setup: the GHCR packages (image + chart) must be made public (or consumers configured with a pull secret), and the repository's Actions need `packages: write` (already declared in the workflow).
+```console
+cosign verify ghcr.io/hyperboliclabs/rental-operator:X.Y.Z \
+  --certificate-identity 'https://github.com/HyperbolicLabs/rental-operator/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+cosign verify ghcr.io/hyperboliclabs/charts/rental-operator:X.Y.Z \
+  --certificate-identity 'https://github.com/HyperbolicLabs/rental-operator/.github/workflows/release.yml@refs/heads/main' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+docker buildx imagetools inspect ghcr.io/hyperboliclabs/rental-operator:X.Y.Z --format '{{ json .SBOM }}'
+```
+
+Actions are pinned to commit SHAs. The committed `Chart.yaml` version is a placeholder set at package time, so a release changes no file.
+
+One-time setup: make the GHCR packages public, or give consumers a pull secret, and set the `ARTIFACTHUB_REPOSITORY_ID` Actions variable to the chart's Artifact Hub repository ID so Artifact Hub lists it under a verified publisher.
 
 ## Security
 

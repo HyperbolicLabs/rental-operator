@@ -130,6 +130,22 @@ helm-lint: ## Lint the Helm chart and check that it renders in both install mode
 vulncheck: govulncheck ## Scan dependencies and the standard library for known vulnerabilities.
 	$(GOVULNCHECK) ./...
 
+# BASE is the git ref crd-check compares the CRDs with.
+BASE ?= origin/main
+
+.PHONY: crd-check
+crd-check: crdify ## Fail on CRD changes since BASE that would break existing objects or clients.
+	@for f in config/crd/bases/*.yaml; do \
+		git cat-file -e $(BASE):$$f 2>/dev/null || continue; \
+		git show $(BASE):$$f > $(LOCALBIN)/crd-base.yaml; \
+		echo "$$f"; \
+		$(CRDIFY) --config hack/crdify.yaml file://$(LOCALBIN)/crd-base.yaml file://$$f || exit 1; \
+	done
+
+.PHONY: release-version
+release-version: ## Print the next release's version. Set RELEASE to check a version of your own.
+	@hack/release-version.sh $(RELEASE)
+
 ##@ Build
 
 .PHONY: build
@@ -214,16 +230,23 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 GOVULNCHECK ?= $(LOCALBIN)/govulncheck
+CRDIFY ?= $(LOCALBIN)/crdify
 
 ## Tool Versions
+# renovate: datasource=go depName=sigs.k8s.io/kustomize/kustomize/v5
 KUSTOMIZE_VERSION ?= v5.7.1
+# renovate: datasource=go depName=sigs.k8s.io/controller-tools
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
+# renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
 GOLANGCI_LINT_VERSION ?= v2.15.0
+# renovate: datasource=go depName=golang.org/x/vuln
 GOVULNCHECK_VERSION ?= v1.9.0
+# renovate: datasource=go depName=sigs.k8s.io/crdify
+CRDIFY_VERSION ?= v0.6.0
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -257,6 +280,11 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 govulncheck: $(GOVULNCHECK) ## Download govulncheck locally if necessary.
 $(GOVULNCHECK): $(LOCALBIN)
 	$(call go-install-tool,$(GOVULNCHECK),golang.org/x/vuln/cmd/govulncheck,$(GOVULNCHECK_VERSION))
+
+.PHONY: crdify
+crdify: $(CRDIFY) ## Download crdify locally if necessary.
+$(CRDIFY): $(LOCALBIN)
+	$(call go-install-tool,$(CRDIFY),sigs.k8s.io/crdify,$(CRDIFY_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary

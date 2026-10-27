@@ -1,0 +1,6 @@
+# Configuration for crdify (https://github.com/kubernetes-sigs/crdify), which
+# fails CI on CRD changes that would break existing objects or clients. A
+# description change breaks neither, so it is not checked.
+validations:
+  - name: description
+    enforcement: None

@@ -11,4 +11,4 @@
 - [ ] Tests cover the change, including failure modes
 - [ ] `make manifests generate` was run and the results committed, if `api/` or markers changed
 - [ ] README or `docs/` updated if user-visible behavior changed
-- [ ] The title is a Conventional Commit written for the release notes, with `!` for a breaking change
+- [ ] The title is a Conventional Commit written for the release notes, with `!` and the `breaking-api-change` label for a breaking change
