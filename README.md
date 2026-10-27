@@ -41,7 +41,7 @@ It is built to never spend money you didn't ask for: a create is never retried b
 
 ## Project status
 
-rental-operator is at v0.1, its first public release. The API is `compute.hyperbolic.ai/v1alpha1`, so fields may still change in a minor release, and the release notes call out each change with migration steps. [SUPPORT.md](SUPPORT.md) lists the supported releases and Kubernetes versions.
+rental-operator is at v0.1, its first public release. The API is `compute.hyperbolic.ai/v1alpha1`, so fields may still change in a minor release, and the release notes call out each change with migration steps. [SUPPORT.md](SUPPORT.md) lists the supported releases and Kubernetes versions. [API versioning](docs/api-versioning.md) explains what each API version promises.
 
 ## How it works
 
@@ -169,9 +169,12 @@ helm install rental-operator \
 |---|---|
 | [Architecture](docs/architecture.md) | Components, the GPURental lifecycle, the create and delete guarantees, polling and API budget. |
 | [Install, upgrade and uninstall](docs/install.md) | Cluster-wide and namespaced installs, verifying a release, CRD upgrades. |
-| [Custom resources](docs/resources.md) | Every field, condition and reason. |
+| [Custom resources](docs/resources.md) | What each field does, and the conditions and reasons. |
 | [Common operations](docs/operations.md) | Regions, ports, terminating, orphaning, rebooting. |
-| [Development](docs/development.md) | Running locally and cutting a release. |
+| [API reference](docs/reference/api.md) | Every field, generated from the Go types. |
+| [API versioning](docs/api-versioning.md) | What `v1alpha1` promises and how the API will graduate. |
+| [Development](docs/development.md) | Running the operator locally. |
+| [Releases](RELEASE.md) | Versioning, what a release contains, how one is cut. |
 | [Support](SUPPORT.md) | Getting help, supported releases and Kubernetes versions. |
 | [Releases](https://github.com/HyperbolicLabs/rental-operator/releases) and [roadmap](ROADMAP.md) | What changed and what comes next. |
 
@@ -209,8 +212,9 @@ A local cluster still rents real GPUs with your key, so delete your GPURentals b
 
 - Ask questions and share ideas in [GitHub Discussions](https://github.com/HyperbolicLabs/rental-operator/discussions).
 - Report bugs and request features in [issues](https://github.com/HyperbolicLabs/rental-operator/issues/new/choose).
+- Using rental-operator? Add your organization to [ADOPTERS.md](ADOPTERS.md).
 
-Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to get started, and everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md). The [roadmap](ROADMAP.md) shows what comes next.
+Contributions are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) explains how to get started, and everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md). [GOVERNANCE.md](GOVERNANCE.md) explains how decisions are made and how contributors become [maintainers](MAINTAINERS.md). The [roadmap](ROADMAP.md) shows what comes next.
 
 For commercial support, contact Hyperbolic at [support@hyperbolic.ai](mailto:support@hyperbolic.ai).
 

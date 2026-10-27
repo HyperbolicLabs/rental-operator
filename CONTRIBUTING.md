@@ -2,6 +2,8 @@
 
 Thanks for your interest. Bug reports, fixes, docs and features are all welcome. See a missing feature? Open an issue to discuss it, or send a PR.
 
+[GOVERNANCE.md](GOVERNANCE.md) explains how decisions are made and how contributors become maintainers.
+
 ## Before you start
 
 - **Bugs:** open an issue with the bug template. Include versions, the resource YAML and operator logs, with API keys removed.
@@ -26,10 +28,11 @@ make build              # regenerate code and manifests, then build bin/manager
 make test               # unit and envtest suites
 make lint               # golangci-lint
 make manifests generate # regenerate CRDs, RBAC and deepcopy after changing api/
+make api-docs           # regenerate docs/reference/api.md after changing api/
 make test-e2e           # end-to-end tests on a throwaway kind cluster
 ```
 
-After changing anything under `api/` or a `+kubebuilder` marker, run `make manifests generate` and commit the result, including the CRD copies under `charts/rental-operator/crds/`.
+After changing anything under `api/` or a `+kubebuilder` marker, run `make manifests generate api-docs` and commit the result, including the CRD copies under `charts/rental-operator/crds/` and the API reference in `docs/reference/api.md`. `make verify` fails if any of them is stale.
 
 `make test-e2e` uses kind's default Kubernetes version. CI runs it on every version in [SUPPORT.md](SUPPORT.md). To reproduce one, pass its node image from [`test-e2e.yml`](.github/workflows/test-e2e.yml):
 
@@ -50,4 +53,4 @@ Tests must never call the real Hyperbolic API. Controller tests run against the 
 
 ## Releases
 
-Releases follow [semantic versioning](https://semver.org/). Before 1.0, minor versions may contain breaking changes. They are always called out in the release notes. See [Releasing](docs/development.md#releasing) for how a release is cut.
+Releases follow [semantic versioning](https://semver.org/). Before 1.0, minor versions may contain breaking changes. They are always called out in the release notes. See [RELEASE.md](RELEASE.md) for how a release is cut.

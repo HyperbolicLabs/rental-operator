@@ -1,0 +1,10 @@
+# Configuration for crd-ref-docs (make api-docs), which renders
+# docs/reference/api.md from the Go types and their comments.
+processor:
+  ignoreTypes:
+    - "List$"
+  ignoreFields:
+    - "TypeMeta$"
+
+render:
+  kubernetesVersion: "1.35"
