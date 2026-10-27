@@ -42,6 +42,7 @@ train-run-42   Running   h100   8       us-central-1   8817        conscious-bou
 - [Local development (kind)](#local-development-kind)
 - [Security](#security)
 - [Limitations](#limitations)
+- [Contributing](#contributing)
 
 ---
 
@@ -74,7 +75,7 @@ Three custom resources:
 
 - A Kubernetes cluster (v1.25+) and `kubectl`.
 - [Helm](https://helm.sh) 3.x.
-- A **Hyperbolic API key** (`sk_live_…`) from the [dashboard](https://app.hyperbolic.ai).
+- A **Hyperbolic API key** (`sk_live_...`) from the [dashboard](https://app.hyperbolic.ai).
 - An **SSH public key registered on your Hyperbolic account** (in the dashboard) if you want to log into the rented VM — rentals bake in your account's registered key. The operator does **not** manage SSH keys (see [Limitations](#limitations)); if the API reports the account has no key, it surfaces a `NoSSHKey` condition instead of provisioning a machine you can't reach.
 
 ## Install
@@ -179,15 +180,15 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | `gpuCount` | int (required) | GPUs to rent. `>8` yields a multi-node rental. |
 | `region` | string | Region to rent in. Omit to auto-pick the cheapest available. |
 | `networkType` | enum | `ethernet` or `infiniband`. Omit to let the operator pick an available fabric. |
-| `displayName` | string (≤40) | Name shown in the Hyperbolic dashboard (the rental label). Opt-in. |
+| `displayName` | string, up to 40 characters | Name shown in the Hyperbolic dashboard (the rental label). Opt-in. |
 | `ports` | []int | Ports to open on the instance IP (forge regions only, ≤20, unique). Immutable once created. |
 | `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. |
-| `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. One-way — cannot be unset; create a new GPURental to rent again. |
+| `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. This is one-way and cannot be unset. Create a new GPURental to rent again. |
 | `rebootGeneration` | int | Increase to reboot all nodes. |
 
 | Status field | Description |
 |---|---|
-| `phase` | `Provisioning` (created, coming up) / `Running` / `Rebooting` / `Terminating` / `Terminated` / `Failed` / `Blocked` (can't be created yet — see the reason on `Ready`) / `Unknown`. |
+| `phase` | `Provisioning` (created, coming up) / `Running` / `Rebooting` / `Terminating` / `Terminated` / `Failed` / `Blocked` (can't be created yet, see the reason on `Ready`) / `Unknown`. |
 | `rentalId` | The server's string rental id. |
 | `name` | The server's 3-word rental name (shown in the dashboard). |
 | `region` | Resolved region. |
@@ -219,7 +220,7 @@ $ kubectl get gpuavailability h100-ca -o jsonpath='{.status.offerings[0]}'
 {"gpuType":"h100","gpuCount":1,"region":"ca-east-1","networkType":"ethernet","costCentsPerHour":275,"available":9,"enabled":true}
 ```
 
-The catalogue is personalized to your account (queried with your key), so it shows what your account can actually rent. `available` is tri-state — a known count, or absent when the provider doesn't report stock. A shared per-account cache means many `GPUAvailability` objects on one account cost a single API call per refresh interval (`--catalog-refresh-interval`, default 5m).
+The catalogue is personalized to your account (queried with your key), so it shows what your account can actually rent. `available` is the known in-stock count, or absent when the provider doesn't report stock. A shared per-account cache means many `GPUAvailability` objects on one account cost a single API call per refresh interval (`--catalog-refresh-interval`, default 5m).
 
 ## Common operations
 
@@ -281,7 +282,7 @@ kubectl describe gpurental train-run-42
 | `NoSSHKey` | Your account has no SSH key. Register one in the dashboard, then it retries. |
 | `CredentialError` | The Secret/key is missing or invalid. |
 
-Preflight failures never create a rental (no charge), and the operator backs off rather than hot-looping — fix the spec/account and it self-heals.
+Preflight failures never create a rental (no charge), and the operator backs off rather than hot-looping. Fix the spec or the account and it recovers on its own.
 
 ## Local development (kind)
 
@@ -332,6 +333,7 @@ The tag is the single source of truth for the version — the committed `Chart.y
 - Your API key lives only in a `Secret` you control. The operator reads it at reconcile, sends it solely to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status.
 - The operator acts entirely as your account — it's an API client, so its blast radius is exactly what your API key can already do.
 - It needs `get`/`list`/`watch` on `Secrets` and full access to its own CRDs (see the chart's RBAC). Its only external egress is `api.hyperbolic.ai:443`.
+- Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Limitations
 
@@ -340,6 +342,10 @@ The tag is the single source of truth for the version — the committed `Chart.y
 - **Ports are immutable** after creation and supported only in forge regions.
 - **Polling.** The API has no push notifications, so status is poll-driven (≈10s while pending, ≈60s once running).
 
+## Contributing
+
+Issues and PRs are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) and the [code of conduct](CODE_OF_CONDUCT.md).
+
 ---
 
-Licensed under the Apache License 2.0.
+Licensed under the [Apache License 2.0](LICENSE).

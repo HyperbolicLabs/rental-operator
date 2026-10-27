@@ -1,0 +1,36 @@
+name: Bug report
+description: Something is not working as documented
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: "Remove API keys and other secrets from anything you paste. Security issues go through SECURITY.md, not here."
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Operator version
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: kubernetes
+    attributes:
+      label: Kubernetes version and distribution
+      placeholder: v1.34 on EKS
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output (kubectl get -o yaml of the resource, operator logs)
+      render: shell
