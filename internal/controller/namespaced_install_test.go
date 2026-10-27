@@ -25,15 +25,8 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-)
 
-var _ = DescribeTable("ParseWatchNamespaces",
-	func(flag string, want []string) {
-		Expect(ParseWatchNamespaces(flag)).To(Equal(want))
-	},
-	Entry("empty watches everything", "", nil),
-	Entry("one namespace", "ml", []string{"ml"}),
-	Entry("trims, drops blanks and duplicates", " ml, research,,ml ", []string{"ml", "research"}),
+	"github.com/HyperbolicLabs/rental-operator/internal/scope"
 )
 
 var _ = Describe("A namespaced install", func() {
@@ -41,7 +34,7 @@ var _ = Describe("A namespaced install", func() {
 
 	It("only sees the namespaces it watches", func() {
 		watched, other := newFakeAccount(ctx), newFakeAccount(ctx) // both have a labeled Secret
-		opts := ManagerCacheOptions([]string{watched.namespace}, "")
+		opts := scope.CacheOptions([]string{watched.namespace}, "")
 		Expect(opts.DefaultNamespaces).To(HaveKey(watched.namespace))
 		opts.Scheme = k8sClient.Scheme()
 		informers, err := cache.New(cfg, opts)

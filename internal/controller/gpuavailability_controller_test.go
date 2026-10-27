@@ -62,7 +62,7 @@ var _ = Describe("GPUAvailability Controller", func() {
 		})
 
 		It("records a credential-error condition when the ProviderConfig is missing", func() {
-			r := &GPUAvailabilityReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), Catalog: NewCatalogCache(0)}
+			r := newAvailabilityReconciler(0)
 
 			_, err := r.Reconcile(ctx, reconcile.Request{NamespacedName: typeNamespacedName})
 			Expect(err).NotTo(HaveOccurred())

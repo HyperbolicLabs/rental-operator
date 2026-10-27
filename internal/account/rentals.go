@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+package account
 
 import (
 	"context"
@@ -27,11 +27,11 @@ import (
 )
 
 const (
-	// rentalListProvisioningTTL is how long a list stays fresh while any
+	// RentalListProvisioningTTL is how long a list stays fresh while any
 	// rental on the account is still starting.
-	rentalListProvisioningTTL = 10 * time.Second
-	// rentalListTTL is how long a list stays fresh otherwise.
-	rentalListTTL = 60 * time.Second
+	RentalListProvisioningTTL = 10 * time.Second
+	// RentalListTTL is how long a list stays fresh otherwise.
+	RentalListTTL = 60 * time.Second
 )
 
 // RentalCache shares one list of an account's active rentals among every
@@ -43,10 +43,10 @@ const (
 type RentalCache struct {
 	clock   clock.PassiveClock
 	mu      sync.Mutex
-	entries map[string]rentalEntry
+	entries map[Key]rentalEntry
 	// gens counts invalidations per account. A fetch is stored only if no
 	// invalidation happened while it was in flight.
-	gens  map[string]uint64
+	gens  map[Key]uint64
 	group singleflight.Group
 }
 
@@ -60,12 +60,12 @@ func NewRentalCache(c clock.PassiveClock) *RentalCache {
 	if c == nil {
 		c = clock.RealClock{}
 	}
-	return &RentalCache{clock: c, entries: map[string]rentalEntry{}, gens: map[string]uint64{}}
+	return &RentalCache{clock: c, entries: map[Key]rentalEntry{}, gens: map[Key]uint64{}}
 }
 
 // List returns the account's active rentals, from the cache if fresh.
 // Concurrent callers for the same account share one fetch.
-func (c *RentalCache) List(ctx context.Context, hc *hyperbolic.Client, key string) ([]hyperbolic.RentalWithStatus, error) {
+func (c *RentalCache) List(ctx context.Context, hc *hyperbolic.Client, key Key) ([]hyperbolic.RentalWithStatus, error) {
 	c.mu.Lock()
 	e, ok := c.entries[key]
 	gen := c.gens[key]
@@ -74,8 +74,8 @@ func (c *RentalCache) List(ctx context.Context, hc *hyperbolic.Client, key strin
 		return e.rentals, nil
 	}
 
-	v, err, _ := c.group.Do(key, func() (any, error) {
-		rentals, err := listRentals(ctx, hc)
+	v, err, _ := c.group.Do(string(key), func() (any, error) {
+		rentals, err := ListRentals(ctx, hc)
 		if err != nil {
 			return nil, err
 		}
@@ -93,10 +93,7 @@ func (c *RentalCache) List(ctx context.Context, hc *hyperbolic.Client, key strin
 }
 
 // Invalidate drops the account's list, after a create or terminate.
-func (c *RentalCache) Invalidate(key string) {
-	if c == nil {
-		return
-	}
+func (c *RentalCache) Invalidate(key Key) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.entries, key)
@@ -107,8 +104,8 @@ func (c *RentalCache) Invalidate(key string) {
 func ttlFor(rentals []hyperbolic.RentalWithStatus) time.Duration {
 	for _, vm := range rentals {
 		if vm.Status == hyperbolic.RentalStatusPending {
-			return rentalListProvisioningTTL
+			return RentalListProvisioningTTL
 		}
 	}
-	return rentalListTTL
+	return RentalListTTL
 }

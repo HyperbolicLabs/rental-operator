@@ -37,13 +37,14 @@ import (
 	"strings"
 	"time"
 
-	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 const (
@@ -55,6 +56,10 @@ const (
 	// concludes nothing was created and tries again.
 	createSettleGrace = 30 * time.Second
 )
+
+// maxLabelLength is the longest rental label the API accepts. The spec does
+// not document it, and 40 was observed against the live API.
+const maxLabelLength = 40
 
 // rentalLabel is the label the rental carries in Hyperbolic: spec.displayName,
 // or "<metadata.name>-<first 6 characters of the UID>" cut to the API's
@@ -95,7 +100,7 @@ func createPendingSince(gr *hypv1alpha1.GPURental) (time.Time, bool) {
 // match its shape. The shape check keeps a stranger's rental with the same
 // dashboard name from being adopted.
 func (r *GPURentalReconciler) findByLabel(ctx context.Context, hc *hyperbolic.Client, gr *hypv1alpha1.GPURental) ([]hyperbolic.RentalWithStatus, error) {
-	rentals, err := rentalsWithLabel(ctx, hc, rentalLabel(gr))
+	rentals, err := account.RentalsWithLabel(ctx, hc, rentalLabel(gr))
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +118,7 @@ func (r *GPURentalReconciler) findByLabel(ctx context.Context, hc *hyperbolic.Cl
 }
 
 // resolvePendingCreate settles a create whose outcome was not recorded.
-func (r *GPURentalReconciler) resolvePendingCreate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds resolvedCreds, since time.Time) (ctrl.Result, error) {
+func (r *GPURentalReconciler) resolvePendingCreate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds account.Credentials, since time.Time) (ctrl.Result, error) {
 	log := logf.FromContext(ctx)
 	matches, err := r.findByLabel(ctx, hc, gr)
 	if err != nil {
@@ -127,7 +132,7 @@ func (r *GPURentalReconciler) resolvePendingCreate(ctx context.Context, gr *hypv
 		log.Info("found the rental of a create whose outcome was unknown", "rentalId", matches[0].RentalID)
 		return r.adopt(ctx, gr, &matches[0])
 	case 0:
-		if wait := since.Add(createRequestTimeout + createSettleGrace).Sub(r.now()); wait > 0 {
+		if wait := since.Add(createRequestTimeout + createSettleGrace).Sub(r.Clock.Now()); wait > 0 {
 			gr.Status.Phase = hypv1alpha1.PhaseProvisioning
 			r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning,
 				"Confirming whether the last create request took effect before trying again")
@@ -202,4 +207,164 @@ func (r *GPURentalReconciler) patchAnnotations(ctx context.Context, gr *hypv1alp
 		delete(gr.Annotations, k)
 	}
 	return r.Patch(ctx, gr, client.MergeFrom(base))
+}
+
+// reconcileEnsureCreated adopts an orphaned rental or creates a new one.
+func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds account.Credentials) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	// Recovery path 1: an annotation id from a prior create whose status
+	// write didn't land. The annotation is only written after a successful
+	// create, so a rental exists — never fall through to create from here (that
+	// would double-rent). On a transient list error, retry; if the rental is
+	// genuinely gone it was terminated externally, so stop (we don't re-rent).
+	if id := gr.Annotations[hypv1alpha1.AnnotationRentalID]; id != "" {
+		vm, err := r.findRental(ctx, hc, creds.Key(), id)
+		if err != nil {
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
+			return r.finish(ctx, gr, apiRetry)
+		}
+		r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
+		if vm != nil {
+			r.applyRentalToStatus(gr, vm)
+			return r.finish(ctx, gr, pollInterval(vm.Status))
+		}
+		r.markTerminatedExternally(gr)
+		return r.finish(ctx, gr, 0)
+	}
+
+	// Recovery path 2: a create was sent but its outcome was never recorded.
+	// Find the rental by label before anything else. Never create blindly.
+	if since, pending := createPendingSince(gr); pending {
+		return r.resolvePendingCreate(ctx, gr, hc, creds, since)
+	}
+
+	// Recovery path 3: a user-chosen display name may already name a rental
+	// (for example one left running by a GPURental deleted with
+	// deletionPolicy Orphan). Adopt it if exactly one matches. A generated
+	// label contains this object's UID, so no other rental can carry it.
+	if gr.Spec.DisplayName != "" {
+		matches, err := r.findByLabel(ctx, hc, gr)
+		if err != nil {
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
+			return r.finish(ctx, gr, apiRetry)
+		}
+		if len(matches) == 1 {
+			log.Info("adopted existing rental by label", "rentalId", matches[0].RentalID)
+			r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
+			return r.adopt(ctx, gr, &matches[0])
+		}
+	}
+
+	// Preflight availability + balance, then create.
+	return r.preflightAndCreate(ctx, gr, hc, creds)
+}
+
+// preflightAndCreate selects an option and creates the rental.
+func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1alpha1.GPURental, hc *hyperbolic.Client, creds account.Credentials) (ctrl.Result, error) {
+	log := logf.FromContext(ctx)
+
+	// Read the account's rental options through the shared cache: one API
+	// call per account per interval, whatever the number of objects.
+	options, _, err := r.RentalOptions.Get(ctx, hc, creds.Key())
+	if err != nil && len(options) == 0 {
+		r.setBlocked(gr, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
+		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "rental-options: "+err.Error())
+		return r.finish(ctx, gr, apiRetry)
+	}
+	r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
+
+	chosen, reason, msg := selectOption(options, gr.Spec)
+	if chosen == nil {
+		r.setBlocked(gr, reason, msg)
+		return r.finish(ctx, gr, blockedRetry)
+	}
+
+	// Balance preflight (~1h of runway including overdraft).
+	if bal, err := account.GetBalance(ctx, hc); err == nil {
+		if float64(bal.BalanceCents+bal.MaxOverdraftCents) < chosen.CostPerHourCents {
+			r.setBlocked(gr, hypv1alpha1.ReasonInsufficientBalance,
+				fmt.Sprintf("balance %d + overdraft %d cents < ~1h cost %.0f cents",
+					bal.BalanceCents, bal.MaxOverdraftCents, chosen.CostPerHourCents))
+			return r.finish(ctx, gr, blockedRetry)
+		}
+	} // a balance read error is non-fatal for create; the create call will reject if truly broke.
+
+	// Resolve the fabric explicitly (pin the customer's choice, else the option's).
+	networkType := gr.Spec.NetworkType
+	if networkType == "" {
+		networkType = string(chosen.ConnectionType)
+	}
+	req := hyperbolic.CreateRentalParams{
+		RentalType:  hyperbolic.RentalTypeVirtualMachine,
+		GPUCount:    int(gr.Spec.GPUCount),
+		GPUType:     hyperbolic.Ptr(hyperbolic.GPUType(gr.Spec.GPUType)),
+		Region:      hyperbolic.Ptr(chosen.Region),
+		TermType:    hyperbolic.Ptr(hyperbolic.TermTypeOnDemand),
+		NetworkType: hyperbolic.Ptr(hyperbolic.CreateRentalParamsNetworkType(networkType)),
+	}
+	label := rentalLabel(gr)
+	req.Label = &label
+	if len(gr.Spec.Ports) > 0 {
+		ports := int32sToInts(gr.Spec.Ports)
+		req.CustomPorts = &ports
+	}
+
+	// Write ahead: if this annotation cannot be recorded, send nothing.
+	pending := map[string]string{hypv1alpha1.AnnotationCreatePending: r.Clock.Now().UTC().Format(time.RFC3339)}
+	if err := r.patchAnnotations(ctx, gr, pending); err != nil {
+		return ctrl.Result{}, fmt.Errorf("record create-pending: %w", err)
+	}
+
+	row, err := hc.Rentals.Create(ctx, req)
+	r.Rentals.Invalidate(creds.Key()) // whatever happened, the account's list may have changed
+	r.Metrics.RentalCreated(err)
+	if hyperbolic.IsOutcomeUnknown(err) {
+		// The rental may exist. Keep create-pending and look it up by label on
+		// the next reconcile instead of retrying the create.
+		log.Info("create outcome unknown; will look the rental up by label", "label", label, "error", err.Error())
+		gr.Status.Phase = hypv1alpha1.PhaseProvisioning
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning,
+			"Confirming whether the create request took effect before trying again")
+		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "create: "+err.Error())
+		return r.finish(ctx, gr, pendingPoll)
+	}
+	if err != nil {
+		// A definite failure: nothing was created.
+		if cerr := r.patchAnnotations(ctx, gr, nil, hypv1alpha1.AnnotationCreatePending); cerr != nil {
+			return ctrl.Result{}, fmt.Errorf("clear create-pending: %w", cerr)
+		}
+		reason, msg := classifyCreateError(err)
+		log.Info("create failed", "reason", reason, "error", err.Error())
+		r.setBlocked(gr, reason, msg)
+		if reason == hypv1alpha1.ReasonAPIError {
+			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "create: "+err.Error())
+		}
+		return r.finish(ctx, gr, createErrorRetry(reason))
+	}
+
+	// Persist the id before anything else: annotation first (survives a
+	// status write failure), then status. If this write fails, the next
+	// reconcile finds the rental by label.
+	if err := r.recordRentalID(ctx, gr, row.RentalID); err != nil {
+		return ctrl.Result{}, err
+	}
+	gr.Status.RentalID = row.RentalID
+	if name, err := row.Name.Get(); err == nil {
+		gr.Status.Name = name
+	}
+	if row.Region != "" {
+		gr.Status.Region = row.Region
+	}
+	if label, err := row.Label.Get(); err == nil {
+		gr.Status.Label = label
+	}
+	gr.Status.NetworkType = networkType
+	gr.Status.Phase = hypv1alpha1.PhaseProvisioning
+	if len(gr.Spec.Ports) > 0 {
+		gr.Status.OpenPorts = gr.Spec.Ports
+	}
+	r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning, "Rental created; provisioning")
+	log.Info("created rental", "rentalId", row.RentalID, "region", chosen.Region)
+	return r.finish(ctx, gr, pendingPoll)
 }

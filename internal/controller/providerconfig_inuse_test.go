@@ -39,7 +39,7 @@ var _ = Describe("ProviderConfig in use", func() {
 
 	BeforeEach(func() {
 		acct = newFakeAccount(ctx)
-		pcr = &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
+		pcr = newConfigReconciler()
 		pcKey = client.ObjectKey{Namespace: acct.namespace, Name: acct.config.Name}
 	})
 

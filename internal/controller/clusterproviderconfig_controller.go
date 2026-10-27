@@ -28,21 +28,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 // ClusterProviderConfigReconciler reconciles a ClusterProviderConfig object.
+//
+// Every field is required unless its comment says otherwise.
+// SetupWithManager rejects a reconciler that is missing one.
 type ClusterProviderConfigReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	// NewClient builds Hyperbolic API clients. Optional, and nil uses
-	// NewClientFactory with the operator's version.
-	NewClient ClientFactory
+	// NewClient builds Hyperbolic API clients.
+	NewClient account.ClientFactory
 	// APIReader reads around the cache, to explain a Secret the cache does
-	// not hold (it is not labeled). Optional.
+	// not hold because it is not labeled. Optional.
 	APIReader client.Reader
 	// ClusterResourceNamespace is the operator's own namespace, where
-	// ClusterProviderConfig Secrets live.
+	// ClusterProviderConfig Secrets live. Optional: without it, every
+	// ClusterProviderConfig reports that it cannot read its Secret.
 	ClusterResourceNamespace string
+}
+
+// validate checks the reconciler's required dependencies.
+func (r *ClusterProviderConfigReconciler) validate() error {
+	return checkDependencies("ClusterProviderConfig", apiDependencies(r.Client, r.Scheme, r.NewClient)...)
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch;update;patch
@@ -56,7 +65,7 @@ func (r *ClusterProviderConfigReconciler) Reconcile(ctx context.Context, req ctr
 	if err := r.Get(ctx, req.NamespacedName, &cpc); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	creds := credentialSource{client: r.Client, uncached: r.APIReader, clusterNamespace: r.ClusterResourceNamespace}
+	creds := account.Resolver{Client: r.Client, Uncached: r.APIReader, ClusterNamespace: r.ClusterResourceNamespace}
 	return reconcileConfig(ctx, r.Client, creds, r.NewClient, configView{
 		obj:             &cpc,
 		spec:            &cpc.Spec.ProviderConfigSpec,
@@ -69,6 +78,9 @@ func (r *ClusterProviderConfigReconciler) Reconcile(ctx context.Context, req ctr
 // SetupWithManager sets up the controller with the Manager. It also watches
 // Secrets in the operator's namespace and GPURentals in every namespace.
 func (r *ClusterProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := r.validate(); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&hypv1alpha1.ClusterProviderConfig{}, builder.WithPredicates(configChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.configsForSecret)).

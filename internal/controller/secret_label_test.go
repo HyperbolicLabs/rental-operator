@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/scope"
 )
 
 var _ = Describe("Credential Secrets must be labeled", func() {
@@ -56,7 +57,7 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 	}
 
 	It("tells the person to label an unlabeled Secret, then accepts it", func() {
-		r := &ProviderConfigReconciler{Client: k8sClient, Scheme: k8sClient.Scheme(), NewClient: testClientFactory}
+		r := newConfigReconciler()
 		ready := readyOf(r)
 		Expect(ready.Status).To(Equal(metav1.ConditionFalse))
 		Expect(ready.Reason).To(Equal("SecretNotLabeled"))
@@ -86,7 +87,7 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 		var informers cache.Cache
 
 		BeforeEach(func() {
-			opts := ManagerCacheOptions(nil, "")
+			opts := scope.CacheOptions(nil, "")
 			opts.Scheme = k8sClient.Scheme()
 			var err error
 			informers, err = cache.New(cfg, opts)
@@ -114,7 +115,8 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 		It("still says the Secret needs the label, not that it is missing", func() {
 			cached, err := client.New(cfg, client.Options{Scheme: k8sClient.Scheme(), Cache: &client.CacheOptions{Reader: informers}})
 			Expect(err).NotTo(HaveOccurred())
-			r := &ProviderConfigReconciler{Client: cached, Scheme: k8sClient.Scheme(), NewClient: testClientFactory, APIReader: k8sClient}
+			r := newConfigReconciler()
+			r.Client, r.APIReader = cached, k8sClient
 
 			Expect(readyOf(r).Reason).To(Equal("SecretNotLabeled"))
 		})
@@ -123,7 +125,7 @@ var _ = Describe("Credential Secrets must be labeled", func() {
 
 var _ = It("configures the cache to hold only labeled Secrets", func() {
 	var selectors []string
-	for obj, byObject := range ManagerCacheOptions(nil, "").ByObject {
+	for obj, byObject := range scope.CacheOptions(nil, "").ByObject {
 		if _, isSecret := obj.(*corev1.Secret); isSecret {
 			selectors = append(selectors, byObject.Label.String())
 		}

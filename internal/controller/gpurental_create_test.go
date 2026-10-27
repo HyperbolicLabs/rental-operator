@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
 var _ = DescribeTable("rentalLabel",
@@ -57,7 +58,7 @@ var _ = DescribeTable("rentalLabel",
 
 // shortTimeouts builds clients that give up on a request after d, so tests
 // can make a create time out after the fake has applied it.
-func shortTimeouts(d time.Duration) ClientFactory {
+func shortTimeouts(d time.Duration) account.ClientFactory {
 	return func(endpoint, apiKey string) (*hyperbolic.Client, error) {
 		return hyperbolic.NewClient(apiKey,
 			hyperbolic.WithBaseURL(endpoint),

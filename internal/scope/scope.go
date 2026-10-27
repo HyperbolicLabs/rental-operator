@@ -14,28 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controller
+// Package scope decides what the operator watches: which namespaces, and
+// which Secrets its cache may hold.
+package scope
 
 import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
+	"github.com/HyperbolicLabs/rental-operator/internal/account"
 )
 
-// credentialsLabelValue is the value of LabelCredentials on API key Secrets.
-const credentialsLabelValue = "true"
-
-// isCredentialsSecret reports whether s is labeled to hold an API key.
-func isCredentialsSecret(s *corev1.Secret) bool {
-	return s.Labels[hypv1alpha1.LabelCredentials] == credentialsLabelValue
-}
-
-// ManagerCacheOptions configures the manager's cache. It holds only Secrets
+// CacheOptions configures the manager's cache. It holds only Secrets
 // labeled compute.hyperbolic.ai/credentials=true: in a large cluster the
 // other Secrets (Helm releases, service account tokens, TLS keys) would
 // otherwise all be held in the operator's memory. With watchNamespaces set,
@@ -43,8 +36,8 @@ func isCredentialsSecret(s *corev1.Secret) bool {
 // run with a Role per namespace instead of a ClusterRole. Secrets are then
 // also watched in clusterResourceNamespace, where ClusterProviderConfig
 // Secrets live.
-func ManagerCacheOptions(watchNamespaces []string, clusterResourceNamespace string) cache.Options {
-	secrets := cache.ByObject{Label: labels.SelectorFromSet(labels.Set{hypv1alpha1.LabelCredentials: credentialsLabelValue})}
+func CacheOptions(watchNamespaces []string, clusterResourceNamespace string) cache.Options {
+	secrets := cache.ByObject{Label: account.CredentialsSelector()}
 	opts := cache.Options{}
 	if len(watchNamespaces) > 0 {
 		opts.DefaultNamespaces = make(map[string]cache.Config, len(watchNamespaces))
@@ -61,9 +54,9 @@ func ManagerCacheOptions(watchNamespaces []string, clusterResourceNamespace stri
 	return opts
 }
 
-// ParseWatchNamespaces splits a comma-separated --watch-namespaces value,
+// ParseNamespaces splits a comma-separated --watch-namespaces value,
 // dropping blanks and duplicates. Empty means every namespace.
-func ParseWatchNamespaces(v string) []string {
+func ParseNamespaces(v string) []string {
 	var out []string
 	seen := map[string]bool{}
 	for _, ns := range strings.Split(v, ",") {
