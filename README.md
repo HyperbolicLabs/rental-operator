@@ -342,6 +342,7 @@ The tag is the single source of truth for the version — the committed `Chart.y
 - Your API key lives only in a `Secret` you control. The operator reads it at reconcile, sends it solely to the configured Hyperbolic endpoint over HTTPS, and never logs it or writes it to status.
 - The operator acts entirely as your account — it's an API client, so its blast radius is exactly what your API key can already do.
 - It needs `get`/`list`/`watch` on `Secrets` and full access to its own CRDs (see the chart's RBAC). Its only external egress is `api.hyperbolic.ai:443`.
+- Every request carries `User-Agent: rental-operator/<version> hyperbolic-go/<version>`. That is the only usage signal. There is no other telemetry.
 - Report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## Limitations

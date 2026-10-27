@@ -12,6 +12,15 @@ Thanks for your interest. Bug reports, fixes, docs and features are all welcome.
 
 You need Go (the version in `go.mod`), Docker, and for end-to-end tests [kind](https://kind.sigs.k8s.io/). The Makefile downloads the other tools (controller-gen, kustomize, golangci-lint, envtest) into `./bin`.
 
+The operator talks to Hyperbolic through [`hyperbolic-go`](https://github.com/HyperbolicLabs/hyperbolic-go), which is private for now. Until it is public you need read access to it, and:
+
+```console
+export GOPRIVATE=github.com/HyperbolicLabs/*
+export HYPERBOLIC_GO_TOKEN=<a read-only GitHub token>   # only for make docker-build
+```
+
+CI reads the same token from the `HYPERBOLIC_GO_READ_TOKEN` Actions secret.
+
 ```console
 make build              # regenerate code and manifests, then build bin/manager
 make test               # unit and envtest suites
@@ -22,7 +31,7 @@ make test-e2e           # end-to-end tests on a throwaway kind cluster
 
 After changing anything under `api/` or a `+kubebuilder` marker, run `make manifests generate` and commit the result, including the CRD copies under `charts/rental-operator/crds/`.
 
-Tests must never call the real Hyperbolic API.
+Tests must never call the real Hyperbolic API. Controller tests run against the in-memory fake from `hyperbolic-go/hyperbolictest`, which can also inject failures (rate limits, 5xx, timeouts, failures after the server applied a request). See `internal/controller/fakeapi_test.go`.
 
 ## Pull requests
 

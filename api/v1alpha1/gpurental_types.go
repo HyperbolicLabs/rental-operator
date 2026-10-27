@@ -130,16 +130,10 @@ type GPURentalStatus struct {
 	// +optional
 	Phase string `json:"phase,omitempty"`
 
-	// RentalID is the server's string (nanoid) rental id — the stable external
-	// handle, used to match this rental when listing.
+	// RentalID is the server's rental id: the handle terminate and reboot
+	// take, and how this rental is found when listing.
 	// +optional
 	RentalID string `json:"rentalId,omitempty"`
-
-	// NumericID is the server's numeric rental id. This is what the
-	// terminate/reboot APIs take (their `rentalId` parameter is this number,
-	// not the string RentalID above).
-	// +optional
-	NumericID *int64 `json:"numericId,omitempty"`
 
 	// Name is the server-generated random 3-word rental name (e.g.
 	// "conscious-bougainvillea-oryx"). Read-only; surfaced so a human can map

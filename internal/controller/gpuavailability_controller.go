@@ -29,8 +29,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 // catalogRetry is the requeue delay while the catalogue can't be fetched.
@@ -45,6 +45,9 @@ type GPUAvailabilityReconciler struct {
 	Scheme          *runtime.Scheme
 	Catalog         *CatalogCache
 	RefreshInterval time.Duration
+	// NewClient builds Hyperbolic API clients. Optional, and nil uses
+	// NewClientFactory with the operator's version.
+	NewClient ClientFactory
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpuavailabilities,verbs=get;list;watch;create;update;patch;delete
@@ -65,7 +68,12 @@ func (r *GPUAvailabilityReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return r.finish(ctx, &ga, apiRetry)
 	}
 
-	options, fetchedAt, fetchErr := r.Catalog.Get(ctx, creds.newClient(), creds.key())
+	hc, err := creds.newClient(r.NewClient)
+	if err != nil {
+		r.setReady(&ga, metav1.ConditionFalse, "CredentialError", err.Error())
+		return r.finish(ctx, &ga, apiRetry)
+	}
+	options, fetchedAt, fetchErr := r.Catalog.Get(ctx, hc, creds.key())
 	if fetchErr != nil && len(options) == 0 {
 		r.setReady(&ga, metav1.ConditionFalse, "CatalogUnavailable", "rental-options: "+fetchErr.Error())
 		return r.finish(ctx, &ga, catalogRetry)
@@ -119,11 +127,8 @@ func (r *GPUAvailabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // returns matching VM offerings, cheapest first. Pure and unit-testable.
 func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvailabilitySpec) []hypv1alpha1.Offering {
 	out := make([]hypv1alpha1.Offering, 0, len(options))
-	for _, o := range options {
-		if o.MachineType != machineTypeVM {
-			continue
-		}
-		if spec.GPUType != "" && o.GPUType != spec.GPUType {
+	for _, o := range vmOptions(options) {
+		if spec.GPUType != "" && string(o.GPUType) != spec.GPUType {
 			continue
 		}
 		if spec.GPUCount != nil && o.GPUCount != int(*spec.GPUCount) {
@@ -132,7 +137,7 @@ func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvai
 		if spec.Region != "" && o.Region != spec.Region {
 			continue
 		}
-		if spec.NetworkType != "" && o.ConnectionType != spec.NetworkType {
+		if spec.NetworkType != "" && string(o.ConnectionType) != spec.NetworkType {
 			continue
 		}
 		if spec.MaxPriceCentsPerHour != nil && o.CostPerHourCents > float64(*spec.MaxPriceCentsPerHour) {
@@ -150,13 +155,13 @@ func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvai
 		}
 		variant := ""
 		if o.EthernetVariant != nil {
-			variant = *o.EthernetVariant
+			variant = string(*o.EthernetVariant)
 		}
 		out = append(out, hypv1alpha1.Offering{
-			GPUType:          o.GPUType,
+			GPUType:          string(o.GPUType),
 			GPUCount:         int32(o.GPUCount),
 			Region:           o.Region,
-			NetworkType:      o.ConnectionType,
+			NetworkType:      string(o.ConnectionType),
 			EthernetVariant:  variant,
 			CostCentsPerHour: int64(math.Round(o.CostPerHourCents)),
 			Available:        avail,

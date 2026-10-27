@@ -19,21 +19,21 @@ package controller
 import (
 	"testing"
 
+	hyperbolic "github.com/HyperbolicLabs/hyperbolic-go"
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
-	"github.com/HyperbolicLabs/rental-operator/internal/hyperbolic"
 )
 
 func avail(n int) *int { return &n }
 
 func TestSelectOption(t *testing.T) {
-	opts := []hyperbolic.RentalOption{
+	opts := rentalOptions([]hyperbolic.VirtualMachineOption{
 		{MachineType: "virtual-machine", Enabled: true, GPUType: "h100", GPUCount: 8, Region: "us-east-1", ConnectionType: "ethernet", CostPerHourCents: 2500, TotalAvailable: avail(4)},
 		{MachineType: "virtual-machine", Enabled: true, GPUType: "h100", GPUCount: 8, Region: "us-central-1", ConnectionType: "ethernet", CostPerHourCents: 2390, TotalAvailable: avail(2)},
 		{MachineType: "virtual-machine", Enabled: true, GPUType: "h100", GPUCount: 8, Region: "eu-north-2", ConnectionType: "infiniband", CostPerHourCents: 2100, TotalAvailable: avail(1)},
 		{MachineType: "virtual-machine", Enabled: false, GPUType: "h100", GPUCount: 8, Region: "us-west-1", ConnectionType: "ethernet", CostPerHourCents: 1000, TotalAvailable: avail(9)},
 		{MachineType: "bare-metal", Enabled: true, GPUType: "h100", GPUCount: 8, Region: "us-central-1", ConnectionType: "ethernet", CostPerHourCents: 1, TotalAvailable: avail(9)},
 		{MachineType: "virtual-machine", Enabled: true, GPUType: "h200", GPUCount: 8, Region: "us-central-1", ConnectionType: "ethernet", CostPerHourCents: 1, TotalAvailable: avail(9)},
-	}
+	})
 
 	tests := []struct {
 		name       string
@@ -100,7 +100,7 @@ func TestSelectOption(t *testing.T) {
 			if got.Region != tc.wantRegion {
 				t.Fatalf("region = %s, want %s", got.Region, tc.wantRegion)
 			}
-			if got.MachineType != machineTypeVM {
+			if got.MachineType != hyperbolic.VirtualMachineOptionMachineTypeVirtualMachine {
 				t.Fatalf("selected non-VM machineType %q", got.MachineType)
 			}
 		})
