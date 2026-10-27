@@ -8,7 +8,7 @@ spec:
   providerConfigRef:
     name: default
 
-  gpuType: h100          # h100 | h200 | b200 | rtx-6000-pro
+  gpuType: h100          # as the catalog names it: h100, h200, b200, rtx-6000-pro, ...
   gpuCount: 8            # >8 yields a multi-node rental
 
   # Optional. Omit to let the operator auto-pick the cheapest available region.
@@ -29,6 +29,7 @@ spec:
 
   # Permanently terminate but keep this object as a read-only record (one-way).
   # terminated: false
-  #
-  # Deleting this object also terminates the rental (via the finalizer) and then
-  # removes it: kubectl delete gpurental train-run-42
+
+  # Deleting this object terminates the rental first and removes the object
+  # once it is confirmed gone. Orphan leaves the rental running instead.
+  # deletionPolicy: Delete

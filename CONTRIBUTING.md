@@ -37,11 +37,11 @@ Tests must never call the real Hyperbolic API. Controller tests run against the 
 
 - Keep PRs focused: one logical change per PR.
 - Add or update tests for every behavior change. Code paths that create or terminate rentals (anything that spends money) need tests for their failure modes, not only the happy path.
-- Update the README when user-visible behavior changes.
+- Update the README or `docs/` when user-visible behavior changes.
 - CI (lint, tests, end-to-end) must pass before review.
 - PR titles follow `type(scope): subject` (for example `fix(gpurental): never remove the finalizer while a rental may be billing`). PRs are squash-merged, so the title becomes the commit on `main`.
 - A breaking change to the API needs `!` in the title, the `breaking-api-change` label, and migration steps in the description. CI fails on an incompatible CRD change without the label.
 
 ## Releases
 
-Releases follow [semantic versioning](https://semver.org/). Before 1.0, minor versions may contain breaking changes. They are always called out in the release notes. See [Releasing](README.md#releasing) for how a release is cut.
+Releases follow [semantic versioning](https://semver.org/). Before 1.0, minor versions may contain breaking changes. They are always called out in the release notes. See [Releasing](docs/development.md#releasing) for how a release is cut.

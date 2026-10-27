@@ -1,0 +1,11 @@
+# rental-operator documentation
+
+| Page | What it covers |
+|---|---|
+| [Architecture](architecture.md) | Components, the GPURental lifecycle, how creates and deletes stay safe, polling and API budget, credentials. |
+| [Install, upgrade and uninstall](install.md) | Prerequisites, cluster-wide and namespaced installs, verifying a release, CRD upgrades, removing the operator safely. |
+| [Custom resources](resources.md) | Every field of ProviderConfig, ClusterProviderConfig, GPURental and GPUAvailability, with their conditions and reasons. |
+| [Common operations](operations.md) | Regions, ports, terminating, orphaning, rebooting. |
+| [Development](development.md) | Running the operator locally and cutting a release. |
+
+Also at the repository root: [ROADMAP.md](../ROADMAP.md), [CONTRIBUTING.md](../CONTRIBUTING.md) and [SECURITY.md](../SECURITY.md).
