@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -168,11 +169,15 @@ type ClientFactory func(endpoint, apiKey string) (*hyperbolic.Client, error)
 // NewClientFactory returns the ClientFactory the manager uses. Its clients
 // identify the operator in the User-Agent header and never retry on their
 // own: reconcilers requeue on errors, so a reconcile never blocks on backoff.
-func NewClientFactory(userAgent string) ClientFactory {
+// They share one HTTP client over transport (nil: http.DefaultTransport),
+// whose timeout is what createRequestTimeout relies on.
+func NewClientFactory(userAgent string, transport http.RoundTripper) ClientFactory {
+	httpClient := &http.Client{Timeout: createRequestTimeout, Transport: transport}
 	return func(endpoint, apiKey string) (*hyperbolic.Client, error) {
 		return hyperbolic.NewClient(apiKey,
 			hyperbolic.WithBaseURL(endpoint),
 			hyperbolic.WithUserAgent(userAgent),
+			hyperbolic.WithHTTPClient(httpClient),
 			hyperbolic.WithRetryPolicy(hyperbolic.NoRetries()),
 		)
 	}
@@ -182,7 +187,7 @@ func NewClientFactory(userAgent string) ClientFactory {
 // the default factory when f is nil.
 func (rc resolvedCreds) newClient(f ClientFactory) (*hyperbolic.Client, error) {
 	if f == nil {
-		f = NewClientFactory("rental-operator/" + version.Version)
+		f = NewClientFactory("rental-operator/"+version.Version, nil)
 	}
 	return f(rc.endpoint, rc.apiKey)
 }

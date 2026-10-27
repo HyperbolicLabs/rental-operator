@@ -32,8 +32,9 @@ import (
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
 )
 
-// testClientFactory builds API clients the way the manager does.
-var testClientFactory = NewClientFactory("rental-operator/test")
+// testClientFactory builds API clients the way the manager does, recording
+// their requests in testMetrics.
+var testClientFactory = NewClientFactory("rental-operator/test", testMetrics.Transport(nil))
 
 // fakeAccount is a namespace wired to an in-memory Hyperbolic API: a Secret
 // holding the fake's API key and a ProviderConfig pointing at the fake.
@@ -95,6 +96,7 @@ func newRentalReconciler() *GPURentalReconciler {
 		Catalog:     NewCatalogCache(time.Minute),
 		NewClient:   testClientFactory,
 		Credentials: NewCredentialMemory(),
+		Metrics:     testMetrics,
 	}
 }
 

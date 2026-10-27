@@ -1,0 +1,33 @@
+# kube-prometheus-stack values for a local kind cluster: Prometheus and the
+# Prometheus Operator only. Not for shared clusters. See docs/development.md.
+alertmanager:
+  enabled: false
+nodeExporter:
+  enabled: false
+kubeStateMetrics:
+  enabled: false
+defaultRules:
+  create: false
+kubeApiServer: {enabled: false}
+kubelet: {enabled: false}
+kubeControllerManager: {enabled: false}
+coreDns: {enabled: false}
+kubeDns: {enabled: false}
+kubeEtcd: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+prometheusOperator:
+  admissionWebhooks:
+    enabled: false
+  tls:
+    enabled: false
+prometheus:
+  prometheusSpec:
+    # Pick up every ServiceMonitor and PrometheusRule, whatever their labels.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    retention: 2d
+grafana:
+  enabled: false

@@ -1,0 +1,82 @@
+# Unit tests for charts/rental-operator/files/alerts.yaml: make test-alerts.
+rule_files:
+  - ../../charts/rental-operator/files/alerts.yaml
+
+evaluation_interval: 1m
+
+tests:
+  - name: a termination that does not finish pages; one that finishes does not
+    interval: 1m
+    input_series:
+      # Two replicas report the same object.
+      - series: rental_operator_gpurental_termination_pending{namespace="ml", name="stuck", pod="a"}
+        values: 1x30
+      - series: rental_operator_gpurental_termination_pending{namespace="ml", name="stuck", pod="b"}
+        values: 1x30
+      - series: rental_operator_gpurental_termination_pending{namespace="ml", name="quick", pod="a"}
+        values: 1x5
+    alert_rule_test:
+      - eval_time: 14m
+        alertname: GPURentalTerminationStuck
+        exp_alerts: []
+      - eval_time: 16m
+        alertname: GPURentalTerminationStuck
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: ml, name: stuck}
+            exp_annotations:
+              summary: GPURental ml/stuck has been terminating for 15 minutes.
+              description: Its rental may still be billing. Its events (kubectl describe gpurental) say why the termination cannot finish and how to unblock it.
+
+  - name: repeated terminate failures warn; a single retry does not
+    interval: 1m
+    input_series:
+      - series: rental_operator_rental_operations_total{operation="terminate", result="failed", pod="a"}
+        # One failure early, then one a minute from minute 10.
+        values: 0 1 1 1 1 1 1 1 1 1 2 3 4 5 6 7 8 9 10
+    alert_rule_test:
+      - eval_time: 9m
+        alertname: GPURentalTerminateFailing
+        exp_alerts: []
+      - eval_time: 18m
+        alertname: GPURentalTerminateFailing
+        exp_alerts:
+          - exp_labels: {severity: warning}
+            exp_annotations:
+              summary: Terminate requests to the Hyperbolic API keep failing.
+              description: More than 5 failed in 15 minutes. Rentals being terminated keep billing until a request succeeds; rental_operator_api_requests_total shows the status codes.
+
+  - name: several rentals with one label page
+    interval: 1m
+    input_series:
+      - series: rental_operator_gpurental_status{namespace="ml", name="sweep", phase="Unknown", reason="CreateOutcomeUnknown", pod="a"}
+        values: 1x10
+      - series: rental_operator_gpurental_status{namespace="ml", name="fine", phase="Running", reason="Running", pod="a"}
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: GPURentalCreateOutcomeUnknown
+        exp_alerts:
+          - exp_labels: {severity: critical, namespace: ml, name: sweep}
+            exp_annotations:
+              summary: GPURental ml/sweep matches several rentals.
+              description: Several active rentals carry its label, so the operator cannot tell which one it created and creates nothing more. The extra rentals are billing; terminate them in the Hyperbolic dashboard and the operator adopts the one left.
+
+  - name: slow provisioning warns; a rental that comes up does not
+    interval: 1m
+    input_series:
+      - series: rental_operator_gpurental_status{namespace="ml", name="slow", phase="Provisioning", reason="Provisioning", pod="a"}
+        values: 1x30
+      # Provisioning for 10 minutes, then Running.
+      - series: rental_operator_gpurental_status{namespace="ml", name="normal", phase="Provisioning", reason="Provisioning", pod="a"}
+        values: 1x10
+      - series: rental_operator_gpurental_status{namespace="ml", name="normal", phase="Running", reason="Running", pod="a"}
+        values: _x10 1x20
+    alert_rule_test:
+      - eval_time: 21m
+        alertname: GPURentalProvisioningSlow
+        exp_alerts:
+          - exp_labels: {severity: warning, namespace: ml, name: slow}
+            exp_annotations:
+              summary: GPURental ml/slow has been provisioning for 20 minutes.
+              description: Rentals usually reach Running within minutes. Its Ready condition and the rental in the Hyperbolic dashboard show what it is waiting for.
+

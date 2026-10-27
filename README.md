@@ -171,6 +171,7 @@ helm install rental-operator \
 | [Install, upgrade and uninstall](docs/install.md) | Cluster-wide and namespaced installs, verifying a release, CRD upgrades. |
 | [Custom resources](docs/resources.md) | What each field does, and the conditions and reasons. |
 | [Common operations](docs/operations.md) | Regions, ports, terminating, orphaning, rebooting. |
+| [Observability](docs/observability.md) | Prometheus metrics and the alerts the chart ships. |
 | [API reference](docs/reference/api.md) | Every field, generated from the Go types. |
 | [API versioning](docs/api-versioning.md) | What `v1alpha1` promises and how the API will graduate. |
 | [Development](docs/development.md) | Running the operator locally. |

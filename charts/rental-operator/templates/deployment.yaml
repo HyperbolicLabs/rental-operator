@@ -36,7 +36,12 @@ spec:
           command: [/manager]
           args:
             - --health-probe-bind-address=:{{ .Values.healthProbePort }}
-            - --metrics-bind-address={{ .Values.metrics.bindAddress }}
+            {{- if .Values.metrics.enabled }}
+            - --metrics-bind-address=:{{ .Values.metrics.port }}
+            - --metrics-secure={{ .Values.metrics.secure }}
+            {{- else }}
+            - --metrics-bind-address=0
+            {{- end }}
             {{- if .Values.leaderElection.enabled }}
             - --leader-elect
             {{- end }}
@@ -53,6 +58,11 @@ spec:
             - name: health
               containerPort: {{ .Values.healthProbePort }}
               protocol: TCP
+            {{- if .Values.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+              protocol: TCP
+            {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

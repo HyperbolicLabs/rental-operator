@@ -1,0 +1,40 @@
+# Alert rules for rental-operator, in Prometheus rule-file format. The chart
+# installs them as a PrometheusRule (metrics.prometheusRule.enabled).
+# docs/observability.md explains each alert and what to do about it, and
+# test/prometheus/alerts_test.yaml tests them with promtool.
+#
+# Gauges come from every replica's cache, so rules take the max per object.
+groups:
+  - name: rental-operator
+    rules:
+      - alert: GPURentalTerminationStuck
+        expr: max by (namespace, name) (rental_operator_gpurental_termination_pending) == 1
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: GPURental {{ $labels.namespace }}/{{ $labels.name }} has been terminating for 15 minutes.
+          description: Its rental may still be billing. Its events (kubectl describe gpurental) say why the termination cannot finish and how to unblock it.
+      - alert: GPURentalTerminateFailing
+        expr: sum(increase(rental_operator_rental_operations_total{operation="terminate", result="failed"}[15m])) > 5
+        labels:
+          severity: warning
+        annotations:
+          summary: Terminate requests to the Hyperbolic API keep failing.
+          description: More than 5 failed in 15 minutes. Rentals being terminated keep billing until a request succeeds; rental_operator_api_requests_total shows the status codes.
+      - alert: GPURentalCreateOutcomeUnknown
+        expr: max by (namespace, name) (rental_operator_gpurental_status{reason="CreateOutcomeUnknown"}) == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: GPURental {{ $labels.namespace }}/{{ $labels.name }} matches several rentals.
+          description: Several active rentals carry its label, so the operator cannot tell which one it created and creates nothing more. The extra rentals are billing; terminate them in the Hyperbolic dashboard and the operator adopts the one left.
+      - alert: GPURentalProvisioningSlow
+        expr: max by (namespace, name) (rental_operator_gpurental_status{phase="Provisioning"}) == 1
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: GPURental {{ $labels.namespace }}/{{ $labels.name }} has been provisioning for 20 minutes.
+          description: Rentals usually reach Running within minutes. Its Ready condition and the rental in the Hyperbolic dashboard show what it is waiting for.

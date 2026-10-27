@@ -32,12 +32,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	computev1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
 	"github.com/HyperbolicLabs/rental-operator/internal/controller"
+	opmetrics "github.com/HyperbolicLabs/rental-operator/internal/metrics"
 	"github.com/HyperbolicLabs/rental-operator/internal/version"
 	// +kubebuilder:scaffold:imports
 )
@@ -201,7 +203,15 @@ func main() {
 	catalog := controller.NewCatalogCache(catalogRefresh)
 	// Every API request names the operator and SDK versions in its User-Agent,
 	// so adoption can be measured server-side without client telemetry.
-	newClient := controller.NewClientFactory("rental-operator/" + version.Version)
+	// The operator's own metrics are served next to controller-runtime's.
+	// Every API request goes through the recorder's transport.
+	recorder := opmetrics.NewRecorder()
+	if err := recorder.Register(metrics.Registry); err != nil {
+		setupLog.Error(err, "unable to register metrics")
+		os.Exit(1)
+	}
+	metrics.Registry.MustRegister(opmetrics.NewStatusCollector(mgr.GetCache()))
+	newClient := controller.NewClientFactory("rental-operator/"+version.Version, recorder.Transport(nil))
 
 	if err := (&controller.GPURentalReconciler{
 		Client:                   mgr.GetClient(),
@@ -210,6 +220,7 @@ func main() {
 		NewClient:                newClient,
 		Credentials:              controller.NewCredentialMemory(),
 		Rentals:                  controller.NewRentalCache(nil),
+		Metrics:                  recorder,
 		Recorder:                 mgr.GetEventRecorderFor("gpurental-controller"),
 		APIReader:                mgr.GetAPIReader(),
 		ClusterResourceNamespace: clusterResourceNamespace,

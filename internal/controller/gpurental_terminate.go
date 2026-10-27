@@ -187,6 +187,7 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 
 	err := terminateRental(ctx, hc, id, why)
 	r.Rentals.Invalidate(key)
+	r.Metrics.RentalTerminated(err)
 	if err != nil {
 		r.event(gr, corev1.EventTypeWarning, eventTerminateFailed, fmt.Sprintf("Terminating rental %s failed, retrying: %v", id, err))
 		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "terminate: "+err.Error())
