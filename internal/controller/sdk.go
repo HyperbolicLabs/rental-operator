@@ -29,6 +29,10 @@ import (
 // its policies for listing, adopting and terminating rentals, and the
 // shapes its status reports.
 
+// maxLabelLength is the longest rental label the API accepts. The spec does
+// not document it, and 40 was observed against the live API.
+const maxLabelLength = 40
+
 // rentalPageSize and maxRentalPages bound how the active rentals are read: a
 // page of 100, at most 1000 pages.
 const (
@@ -63,6 +67,23 @@ func listRentals(ctx context.Context, hc *hyperbolic.Client) ([]hyperbolic.Renta
 		}
 	}
 	return nil, fmt.Errorf("listing rentals: more than %d pages", maxRentalPages)
+}
+
+// rentalsWithLabel returns the active rentals that carry label and are not
+// ending: the candidates to adopt after a create whose outcome was unknown.
+func rentalsWithLabel(ctx context.Context, hc *hyperbolic.Client, label string) ([]hyperbolic.RentalWithStatus, error) {
+	rentals, err := listRentals(ctx, hc)
+	if err != nil {
+		return nil, err
+	}
+	var out []hyperbolic.RentalWithStatus
+	for _, r := range rentals {
+		if l, err := r.Label.Get(); err == nil && l == label &&
+			r.Status != hyperbolic.RentalStatusTerminated && r.Status != hyperbolic.RentalStatusTerminating {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 // terminateRental ends a rental. One that is already gone counts as

@@ -74,10 +74,11 @@ spec:
             properties:
               displayName:
                 description: |-
-                  DisplayName is the human-readable name shown in the Hyperbolic dashboard.
-                  It is sent as the rental's `label`. If unset, no label is sent and the
-                  platform's server-generated name (status.name) is the identity. Opt-in
-                  only — it is never derived from metadata.name and never used for matching.
+                  DisplayName is the human-readable name shown in the Hyperbolic dashboard,
+                  sent as the rental's label. If unset, the operator uses
+                  "<metadata.name>-<first 6 characters of the UID>". The operator uses the
+                  label to find its rental if a create's outcome is unknown, so it should
+                  be unique within the account.
                 maxLength: 40
                 type: string
               gpuCount:
