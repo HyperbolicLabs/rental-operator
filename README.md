@@ -116,9 +116,10 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
    metadata:
      name: default
    spec:
-     apiKeySecretRef:
-       name: hyperbolic-key
-       key: api-key
+     credentials:
+       secretRef:
+         name: hyperbolic-key
+         key: api-key
    ```
 
    Check it authenticated:
@@ -165,9 +166,10 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 
 | Field | Type | Description |
 |---|---|---|
-| `spec.apiKeySecretRef.name` | string (required) | Secret in this namespace holding the API key. |
-| `spec.apiKeySecretRef.key` | string | Key within the Secret. Default `api-key`. |
-| `spec.endpoint` | string | API base URL. Default `https://api.hyperbolic.ai`. |
+| `spec.credentials.source` | string | Where the API key comes from. Only `Secret` (the default) today. |
+| `spec.credentials.secretRef.name` | string (required) | Secret in this namespace holding the API key. |
+| `spec.credentials.secretRef.key` | string | Key within the Secret. Default `api-key`. |
+| `spec.endpoint` | string | API base URL. Default `https://api.hyperbolic.ai`. Must be `https`. Plain `http` is accepted only for `localhost`, `127.0.0.1` or `::1` test servers. |
 | `status.balanceCents` | int | Account balance (cents) at last check. |
 | `status.conditions[]` | condition | `Ready`, `Authenticated`. |
 
