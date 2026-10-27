@@ -8,6 +8,8 @@ spec:
   # Create it with:
   #   kubectl create secret generic hyperbolic-key \
   #     --from-literal=api-key=sk_live_xxxxxxxxxxxxxxxxxxxx
+  #   kubectl label secret hyperbolic-key compute.hyperbolic.ai/credentials=true
+  # The operator only reads Secrets with that label.
   credentials:
     source: Secret
     secretRef:

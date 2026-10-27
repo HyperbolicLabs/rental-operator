@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -56,6 +57,9 @@ type ProviderConfigReconciler struct {
 	// NewClient builds Hyperbolic API clients. Optional, and nil uses
 	// NewClientFactory with the operator's version.
 	NewClient ClientFactory
+	// APIReader reads around the cache, to explain a Secret the cache does
+	// not hold (it is not labeled). Optional.
+	APIReader client.Reader
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch;create;update;patch;delete
@@ -88,10 +92,14 @@ func (r *ProviderConfigReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 	pc.Status.ManagedRentals = int32(len(users))
 
-	creds, err := resolveProviderConfigCreds(ctx, r.Client, &pc)
+	creds, err := resolveProviderConfigCreds(ctx, r.Client, r.APIReader, &pc)
 	if err != nil {
 		log.Info("credential not resolvable", "error", err.Error())
-		r.setNotReady(&pc, "SecretError", err.Error())
+		reason := "SecretError"
+		if errors.Is(err, errSecretNotLabeled) {
+			reason = "SecretNotLabeled"
+		}
+		r.setNotReady(&pc, reason, err.Error())
 		if statusErr := r.Status().Update(ctx, &pc); statusErr != nil {
 			return ctrl.Result{}, statusErr
 		}
