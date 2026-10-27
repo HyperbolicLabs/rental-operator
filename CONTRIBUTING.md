@@ -40,6 +40,7 @@ Tests must never call the real Hyperbolic API. Controller tests run against the 
 - Update the README when user-visible behavior changes.
 - CI (lint, tests, end-to-end) must pass before review.
 - PR titles follow `type(scope): subject` (for example `fix(gpurental): never remove the finalizer while a rental may be billing`). PRs are squash-merged, so the title becomes the commit on `main`.
+- A breaking change to the API needs `!` in the title, the `breaking-api-change` label, and migration steps in the description. CI fails on an incompatible CRD change without the label.
 
 ## Releases
 

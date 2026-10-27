@@ -1,6 +1,6 @@
 apiVersion: v2
 name: rental-operator
-description: Kubernetes operator to rent Hyperbolic on-demand GPUs declaratively via CRDs.
+description: Official Kubernetes operator for Hyperbolic on-demand GPUs
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

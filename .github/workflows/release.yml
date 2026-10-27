@@ -1,74 +1,139 @@
 name: Release
 
-# Runs only when a GitHub Release is published. Ordinary merges/pushes to main
-# run the lint/test workflows, never this one — so nothing ships until you cut a
-# Release with a semver tag (e.g. v0.1.0).
+# Releases the commit of main this workflow runs on. It checks that CI passed
+# on the commit and chooses the version (hack/release-version.sh). After an
+# owner approves, it builds, signs and publishes the image and the chart, and
+# only then creates the tag and the GitHub Release.
+
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Leave empty to release the suggested version, or enter a pre-release of it (v0.3.0-rc.1) or a larger version (v1.0.0).
+        type: string
+        required: false
 
 permissions:
-  contents: write # attach the packaged chart to the Release
-  packages: write # push image + chart to GHCR
+  contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release
 
 jobs:
-  release:
+  prepare:
+    name: Check the commit and choose the version
     runs-on: ubuntu-latest
+    permissions:
+      actions: read # read CI's results for the commit
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Release only from main
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::Releases are cut from main, not $GITHUB_REF."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0 # tags and pull request titles since the last release
+
+      - name: Require CI to have passed on the commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for workflow in lint.yml test.yml verify.yml test-e2e.yml; do
+            conclusion=$(gh run list --workflow "$workflow" --commit "$GITHUB_SHA" --event push --limit 1 --json conclusion --jq '.[0].conclusion // ""')
+            if [ "$conclusion" != success ]; then
+              echo "::error::$workflow has not passed on $GITHUB_SHA (result: ${conclusion:-no finished run}). Wait for it, or fix main first."
+              exit 1
+            fi
+          done
+
+      - name: Choose the version
+        id: version
+        env:
+          REQUESTED: ${{ inputs.version }}
+        run: |
+          version=$(hack/release-version.sh "$REQUESTED")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version" >> "$GITHUB_STEP_SUMMARY"
+
+  release:
+    name: Publish ${{ needs.prepare.outputs.version }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    # Owners approve each run (Settings > Environments > release).
+    environment: release
+    permissions:
+      contents: write # create the tag and the release
+      packages: write # push the image and the chart to GHCR
+      id-token: write # keyless cosign signatures (GitHub OIDC)
+    env:
+      TAG: ${{ needs.prepare.outputs.version }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Compute version and names
+      - name: Compute names
         id: meta
         run: |
-          TAG="${GITHUB_REF_NAME}"          # the Release tag, e.g. v0.1.0
-          VER="${TAG#v}"                    # strip the leading v -> 0.1.0
-          if ! echo "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.+].*)?$'; then
-            echo "::error::Release tag '$TAG' is not semver (expected vX.Y.Z)"; exit 1
-          fi
-          echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-          echo "charts_repo=oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=${TAG#v}"
+            echo "image=ghcr.io/${GITHUB_REPOSITORY,,}"
+            echo "charts_repo=oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
+            if [[ $TAG == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push image (linux/amd64 + arm64)
-        uses: docker/build-push-action@v6
+      - name: Build and push the image (linux/amd64 and linux/arm64)
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          provenance: false
+          # BuildKit attaches an SPDX SBOM and SLSA provenance to the image.
+          sbom: true
+          provenance: mode=max
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-          # hyperbolic-go is private for now. The Dockerfile reads this secret only to download modules.
+          # hyperbolic-go is private for now, and the Dockerfile reads this secret only to download modules.
           secrets: |
             gh_token=${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
+          # A pre-release never moves :latest.
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
-            ${{ steps.meta.outputs.image }}:latest
+            ${{ steps.meta.outputs.prerelease == 'false' && format('{0}:latest', steps.meta.outputs.image) || '' }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+      - name: Sign the image (keyless)
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}@${{ steps.build.outputs.digest }}
+        run: cosign sign --yes "$IMAGE"
 
       - name: Set up Helm
-        uses: azure/setup-helm@v4
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
+          # renovate: datasource=github-releases depName=helm/helm
           version: v3.15.4
 
-      - name: Package chart at the release version
+      - name: Package the chart at the release version
         run: |
           mkdir -p dist
           helm package charts/rental-operator \
@@ -76,14 +141,48 @@ jobs:
             --app-version "${{ steps.meta.outputs.version }}" \
             --destination dist
 
-      - name: Push chart to GHCR (OCI)
+      - name: Push the chart to GHCR (OCI)
+        id: chart
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "$GH_TOKEN" | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
-          helm push "dist/rental-operator-${{ steps.meta.outputs.version }}.tgz" "${{ steps.meta.outputs.charts_repo }}"
+          helm push "dist/rental-operator-${{ steps.meta.outputs.version }}.tgz" "${{ steps.meta.outputs.charts_repo }}" 2>&1 | tee push.log
+          digest=$(awk '/^Digest:/ {print $2}' push.log)
+          test -n "$digest" || { echo "::error::helm push printed no digest"; exit 1; }
+          echo "chart=${{ steps.meta.outputs.charts_repo }}/rental-operator@${digest}" >> "$GITHUB_OUTPUT"
 
-      - name: Attach the packaged chart to the Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/rental-operator-${{ steps.meta.outputs.version }}.tgz
+      - name: Sign the chart (keyless)
+        env:
+          CHART: ${{ steps.chart.outputs.chart }}
+        run: cosign sign --yes "${CHART#oci://}"
+
+      # Artifact Hub reads this file to list the chart under a verified
+      # publisher. It is published once ARTIFACTHUB_REPOSITORY_ID is set to the
+      # chart's Artifact Hub repository ID (Settings > Variables > Actions).
+      - name: Install oras
+        if: vars.ARTIFACTHUB_REPOSITORY_ID != ''
+        uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
+
+      - name: Publish the Artifact Hub metadata
+        if: vars.ARTIFACTHUB_REPOSITORY_ID != ''
+        env:
+          REPOSITORY_ID: ${{ vars.ARTIFACTHUB_REPOSITORY_ID }}
+          CHARTS_REPO: ${{ steps.meta.outputs.charts_repo }}
+        run: |
+          printf 'repositoryID: %s\n' "$REPOSITORY_ID" > artifacthub-repo.yml
+          oras push "${CHARTS_REPO#oci://}/rental-operator:artifacthub.io" \
+            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+            artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
+
+      - name: Create the tag and the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          CHART_FILE: dist/rental-operator-${{ steps.meta.outputs.version }}.tgz
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$TAG" "$CHART_FILE" --target "$GITHUB_SHA" --title "$TAG" --generate-notes "${flags[@]}"
