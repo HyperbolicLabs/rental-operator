@@ -67,10 +67,11 @@ type GPURentalSpec struct {
 	// +optional
 	NetworkType string `json:"networkType,omitempty"`
 
-	// DisplayName is the human-readable name shown in the Hyperbolic dashboard.
-	// It is sent as the rental's `label`. If unset, no label is sent and the
-	// platform's server-generated name (status.name) is the identity. Opt-in
-	// only — it is never derived from metadata.name and never used for matching.
+	// DisplayName is the human-readable name shown in the Hyperbolic dashboard,
+	// sent as the rental's label. If unset, the operator uses
+	// "<metadata.name>-<first 6 characters of the UID>". The operator uses the
+	// label to find its rental if a create's outcome is unknown, so it should
+	// be unique within the account.
 	// +kubebuilder:validation:MaxLength=40
 	// +optional
 	DisplayName string `json:"displayName,omitempty"`
@@ -161,6 +162,11 @@ const (
 	ReasonRegionDisabled           = "RegionDisabled"
 	ReasonPortsUnsupportedInRegion = "PortsUnsupportedInRegion"
 	ReasonNoSSHKey                 = "NoSSHKey"
+	// ReasonCreateOutcomeUnknown means a create may have taken effect but the
+	// rental could not be identified unambiguously (several rentals carry
+	// this object's label). The operator stops and waits for a person rather
+	// than risk renting twice.
+	ReasonCreateOutcomeUnknown = "CreateOutcomeUnknown"
 )
 
 // GPURentalStatus is the observed state of a GPURental.

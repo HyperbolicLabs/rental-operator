@@ -182,7 +182,7 @@ This installs the CRDs, the controller `Deployment`, and the RBAC it needs. By d
 | `gpuCount` | int (required) | GPUs to rent. `>8` yields a multi-node rental. |
 | `region` | string | Region to rent in. Omit to auto-pick the cheapest available. |
 | `networkType` | enum | `ethernet` or `infiniband`. Omit to let the operator pick an available fabric. |
-| `displayName` | string, up to 40 characters | Name shown in the Hyperbolic dashboard (the rental label). Opt-in. |
+| `displayName` | string, up to 40 characters | Name shown in the Hyperbolic dashboard (the rental label). Defaults to `<metadata.name>-<6 characters of the UID>`. The operator uses the label to find its rental if a create's outcome is unknown, so keep it unique within the account. |
 | `ports` | []int | Ports to open on the instance IP (forge regions only, at most 20, unique, 1-65535). |
 | `maxPriceCentsPerHour` | int | Refuse to create above this hourly price. Can be changed at any time. |
 | `terminated` | bool | Permanently release the GPUs but keep the object as a read-only record. This is one-way and cannot be unset. Create a new GPURental to rent again. |
@@ -301,8 +301,11 @@ kubectl describe gpurental train-run-42
 | `NoSSHKey` | Your account has no SSH key. Register one in the dashboard, then it retries. |
 | `CredentialError` | The Secret/key is missing or invalid. |
 | `APIError` | The Hyperbolic API failed (5xx, timeout, rate limit). Retried every 30s. |
+| `CreateOutcomeUnknown` | A create may have succeeded, but several active rentals carry this object's label, so the operator can't tell which is its own. It creates nothing more. Terminate the extras in the dashboard and it adopts the one left. |
 
 Preflight failures never create a rental (no charge), and the operator backs off rather than hot-looping. Fix the spec or the account and it recovers on its own.
+
+Creates are never retried blindly. Before each create the operator records `compute.hyperbolic.ai/create-pending` on the object. If a create times out or fails with a 5xx (it may still have happened), the operator looks the rental up by its label and adopts it, and only creates again once a minute has passed with nothing found.
 
 ## Local development (kind)
 

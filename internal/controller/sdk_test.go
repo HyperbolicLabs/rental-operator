@@ -37,3 +37,14 @@ func rentalOptions(vms []hyperbolic.VirtualMachineOption) []hyperbolic.RentalOpt
 	}
 	return out
 }
+
+// h100x1 asks for one H100 virtual machine in us-central-1, labeled label.
+func h100x1(label string) hyperbolic.CreateRentalParams {
+	return hyperbolic.CreateRentalParams{
+		RentalType: hyperbolic.RentalTypeVirtualMachine,
+		GPUType:    hyperbolic.Ptr(hyperbolic.GPUTypeH100),
+		GPUCount:   1,
+		Region:     hyperbolic.Ptr("us-central-1"),
+		Label:      &label,
+	}
+}

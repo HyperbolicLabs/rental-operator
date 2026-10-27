@@ -27,6 +27,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -78,6 +79,15 @@ type GPURentalReconciler struct {
 	// NewClient builds Hyperbolic API clients. Optional, and nil uses
 	// NewClientFactory with the operator's version.
 	NewClient ClientFactory
+	// Clock tells the time. Optional, and nil uses the real clock.
+	Clock clock.PassiveClock
+}
+
+func (r *GPURentalReconciler) now() time.Time {
+	if r.Clock != nil {
+		return r.Clock.Now()
+	}
+	return time.Now()
 }
 
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=gpurentals,verbs=get;list;watch;create;update;patch;delete
@@ -210,19 +220,26 @@ func (r *GPURentalReconciler) reconcileEnsureCreated(ctx context.Context, gr *hy
 		return r.finish(ctx, gr, 0)
 	}
 
-	// Recovery path 2: adopt by label, only when a displayName was set (unique-ish).
+	// Recovery path 2: a create was sent but its outcome was never recorded.
+	// Find the rental by label before anything else. Never create blindly.
+	if since, pending := createPendingSince(gr); pending {
+		return r.resolvePendingCreate(ctx, gr, hc, creds, since)
+	}
+
+	// Recovery path 3: a user-chosen display name may already name a rental
+	// (for example one left running by a GPURental deleted with
+	// deletionPolicy Orphan). Adopt it if exactly one matches. A generated
+	// label contains this object's UID, so no other rental can carry it.
 	if gr.Spec.DisplayName != "" {
-		vm, err := r.adoptByLabel(ctx, hc, gr)
+		matches, err := r.findByLabel(ctx, hc, gr)
 		if err != nil {
 			r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "list rentals: "+err.Error())
 			return r.finish(ctx, gr, apiRetry)
 		}
-		if vm != nil {
-			log.Info("adopted existing rental by label", "rentalId", vm.RentalID)
-			r.stampRentalID(ctx, gr, vm.RentalID)
-			r.applyRentalToStatus(gr, vm)
+		if len(matches) == 1 {
+			log.Info("adopted existing rental by label", "rentalId", matches[0].RentalID)
 			r.setSynced(gr, metav1.ConditionTrue, hypv1alpha1.ReasonReconcileSuccess, "")
-			return r.finish(ctx, gr, pollInterval(vm.Status))
+			return r.adopt(ctx, gr, &matches[0])
 		}
 	}
 
@@ -285,16 +302,35 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		TermType:    hyperbolic.Ptr(hyperbolic.TermTypeOnDemand),
 		NetworkType: hyperbolic.Ptr(hyperbolic.CreateRentalParamsNetworkType(networkType)),
 	}
-	if gr.Spec.DisplayName != "" {
-		req.Label = &gr.Spec.DisplayName
-	}
+	label := rentalLabel(gr)
+	req.Label = &label
 	if len(gr.Spec.Ports) > 0 {
 		ports := int32sToInts(gr.Spec.Ports)
 		req.CustomPorts = &ports
 	}
 
+	// Write ahead: if this annotation cannot be recorded, send nothing.
+	pending := map[string]string{hypv1alpha1.AnnotationCreatePending: r.now().UTC().Format(time.RFC3339)}
+	if err := r.patchAnnotations(ctx, gr, pending); err != nil {
+		return ctrl.Result{}, fmt.Errorf("record create-pending: %w", err)
+	}
+
 	row, err := hc.Rentals.Create(ctx, req)
+	if hyperbolic.IsOutcomeUnknown(err) {
+		// The rental may exist. Keep create-pending and look it up by label on
+		// the next reconcile instead of retrying the create.
+		log.Info("create outcome unknown; will look the rental up by label", "label", label, "error", err.Error())
+		gr.Status.Phase = hypv1alpha1.PhaseProvisioning
+		r.setReady(gr, metav1.ConditionFalse, hypv1alpha1.ReasonProvisioning,
+			"Confirming whether the create request took effect before trying again")
+		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "create: "+err.Error())
+		return r.finish(ctx, gr, pendingPoll)
+	}
 	if err != nil {
+		// A definite failure: nothing was created.
+		if cerr := r.patchAnnotations(ctx, gr, nil, hypv1alpha1.AnnotationCreatePending); cerr != nil {
+			return ctrl.Result{}, fmt.Errorf("clear create-pending: %w", cerr)
+		}
 		reason, msg := classifyCreateError(err)
 		log.Info("create failed", "reason", reason, "error", err.Error())
 		r.setBlocked(gr, reason, msg)
@@ -304,9 +340,12 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 		return r.finish(ctx, gr, createErrorRetry(reason))
 	}
 
-	// Persist ids before anything else: annotation first (survives a status
-	// write failure), then status.
-	r.stampRentalID(ctx, gr, row.RentalID)
+	// Persist the id before anything else: annotation first (survives a
+	// status write failure), then status. If this write fails, the next
+	// reconcile finds the rental by label.
+	if err := r.recordRentalID(ctx, gr, row.RentalID); err != nil {
+		return ctrl.Result{}, err
+	}
 	gr.Status.RentalID = row.RentalID
 	if name, err := row.Name.Get(); err == nil {
 		gr.Status.Name = name
@@ -368,7 +407,10 @@ func (r *GPURentalReconciler) rebootInstances(ctx context.Context, hc *hyperboli
 		rebooted = true
 	}
 	if rebooted {
-		r.setAnnotation(ctx, gr, hypv1alpha1.AnnotationRebootedGeneration, strconv.Itoa(int(gr.Spec.RebootGeneration)))
+		gen := map[string]string{hypv1alpha1.AnnotationRebootedGeneration: strconv.Itoa(int(gr.Spec.RebootGeneration))}
+		if err := r.patchAnnotations(ctx, gr, gen); err != nil {
+			log.Info("failed to record the applied reboot generation", "error", err.Error())
+		}
 	}
 }
 
@@ -451,34 +493,6 @@ func (r *GPURentalReconciler) findByRentalID(ctx context.Context, hc *hyperbolic
 	return nil, nil
 }
 
-// adoptByLabel returns a single non-terminated rental whose label matches the
-// display name, (nil, nil) if there are zero or multiple matches, or (nil, err)
-// on a list failure.
-func (r *GPURentalReconciler) adoptByLabel(ctx context.Context, hc *hyperbolic.Client, gr *hypv1alpha1.GPURental) (*hyperbolic.RentalWithStatus, error) {
-	rentals, err := listRentals(ctx, hc)
-	if err != nil {
-		return nil, err
-	}
-	matches := make([]*hyperbolic.RentalWithStatus, 0, len(rentals))
-	for i := range rentals {
-		vm := &rentals[i]
-		if l, err := vm.Label.Get(); err != nil || l != gr.Spec.DisplayName {
-			continue
-		}
-		if vm.Status == hyperbolic.RentalStatusTerminated || vm.Status == hyperbolic.RentalStatusTerminating {
-			continue
-		}
-		if string(vm.GPUType) != gr.Spec.GPUType || vm.GPUCount != int(gr.Spec.GPUCount) {
-			continue
-		}
-		matches = append(matches, vm)
-	}
-	if len(matches) == 1 {
-		return matches[0], nil
-	}
-	return nil, nil // 0 or ambiguous → create a fresh one
-}
-
 // ---- small helpers -------------------------------------------------------
 
 // rentalID is the id of the object's rental: from status, or from the
@@ -489,24 +503,6 @@ func (r *GPURentalReconciler) rentalID(gr *hypv1alpha1.GPURental) string {
 		return gr.Status.RentalID
 	}
 	return gr.Annotations[hypv1alpha1.AnnotationRentalID]
-}
-
-func (r *GPURentalReconciler) stampRentalID(ctx context.Context, gr *hypv1alpha1.GPURental, id string) {
-	r.setAnnotation(ctx, gr, hypv1alpha1.AnnotationRentalID, id)
-}
-
-func (r *GPURentalReconciler) setAnnotation(ctx context.Context, gr *hypv1alpha1.GPURental, k, v string) {
-	if gr.Annotations != nil && gr.Annotations[k] == v {
-		return
-	}
-	base := gr.DeepCopy()
-	if gr.Annotations == nil {
-		gr.Annotations = map[string]string{}
-	}
-	gr.Annotations[k] = v
-	if err := r.Patch(ctx, gr, client.MergeFrom(base)); err != nil {
-		logf.FromContext(ctx).Info("failed to stamp annotation", "key", k, "error", err.Error())
-	}
 }
 
 func (r *GPURentalReconciler) setReady(gr *hypv1alpha1.GPURental, status metav1.ConditionStatus, reason, msg string) {
