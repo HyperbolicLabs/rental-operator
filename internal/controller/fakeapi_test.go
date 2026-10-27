@@ -87,10 +87,11 @@ func (a *fakeAccount) rental(name string) *hypv1alpha1.GPURental {
 // whichever fake API a ProviderConfig points at.
 func newRentalReconciler() *GPURentalReconciler {
 	return &GPURentalReconciler{
-		Client:    k8sClient,
-		Scheme:    k8sClient.Scheme(),
-		Catalog:   NewCatalogCache(time.Minute),
-		NewClient: testClientFactory,
+		Client:      k8sClient,
+		Scheme:      k8sClient.Scheme(),
+		Catalog:     NewCatalogCache(time.Minute),
+		NewClient:   testClientFactory,
+		Credentials: NewCredentialMemory(),
 	}
 }
 

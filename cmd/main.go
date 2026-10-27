@@ -192,10 +192,12 @@ func main() {
 	newClient := controller.NewClientFactory("rental-operator/" + version.Version)
 
 	if err := (&controller.GPURentalReconciler{
-		Client:    mgr.GetClient(),
-		Scheme:    mgr.GetScheme(),
-		Catalog:   catalog,
-		NewClient: newClient,
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		Catalog:     catalog,
+		NewClient:   newClient,
+		Credentials: controller.NewCredentialMemory(),
+		Recorder:    mgr.GetEventRecorderFor("gpurental-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "GPURental")
 		os.Exit(1)

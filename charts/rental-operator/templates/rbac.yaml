@@ -13,6 +13,10 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, list, watch]
+  # Events on GPURentals (termination progress and how to get unstuck).
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
   - apiGroups: [compute.hyperbolic.ai]
     resources: [gpurentals, providerconfigs, gpuavailabilities]
     verbs: [create, delete, get, list, patch, update, watch]

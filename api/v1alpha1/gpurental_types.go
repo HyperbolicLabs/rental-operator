@@ -90,11 +90,19 @@ type GPURentalSpec struct {
 	// Terminated permanently releases the rental's GPUs while keeping this
 	// object as a read-only record. It is a ONE-WAY switch: once true it cannot
 	// be set back to false, and the rental is never re-provisioned — create a
-	// new GPURental to rent again. (Deleting the object also terminates, via the
-	// finalizer, and then removes it.)
+	// new GPURental to rent again. (Deleting the object also terminates,
+	// unless deletionPolicy is Orphan, and then removes it.)
 	// +kubebuilder:default=false
 	// +optional
 	Terminated bool `json:"terminated,omitempty"`
+
+	// DeletionPolicy decides what deleting this object does to the rental.
+	// Delete (the default) terminates it first, and the object is not removed
+	// until the rental is confirmed gone. Orphan removes the object and leaves
+	// the rental running.
+	// +kubebuilder:default=Delete
+	// +optional
+	DeletionPolicy DeletionPolicy `json:"deletionPolicy,omitempty"`
 
 	// RebootGeneration reboots all nodes when its value increases. Leave at 0
 	// (or unset) for no reboot.
