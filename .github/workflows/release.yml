@@ -111,9 +111,6 @@ jobs:
           provenance: mode=max
           build-args: |
             VERSION=${{ steps.meta.outputs.version }}
-          # hyperbolic-go is private for now, and the Dockerfile reads this secret only to download modules.
-          secrets: |
-            gh_token=${{ secrets.HYPERBOLIC_GO_READ_TOKEN }}
           # A pre-release never moves :latest.
           tags: |
             ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}

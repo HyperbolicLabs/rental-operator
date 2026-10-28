@@ -51,4 +51,4 @@ Patch releases ship as fixes land. A security fix ships as soon as it is ready, 
 
 Nothing is tagged until everything before it succeeded. Actions are pinned to commit SHAs. The committed `Chart.yaml` version is a placeholder set at package time, so a release changes no file.
 
-One-time setup: make the GHCR packages public, or give consumers a pull secret, and set the `ARTIFACTHUB_REPOSITORY_ID` Actions variable to the chart's Artifact Hub repository ID so Artifact Hub lists it under a verified publisher. Until `hyperbolic-go` is public, the `HYPERBOLIC_GO_READ_TOKEN` secret must be set.
+One-time setup: make the GHCR packages public, or give consumers a pull secret, and set the `ARTIFACTHUB_REPOSITORY_ID` Actions variable to the chart's Artifact Hub repository ID so Artifact Hub lists it under a verified publisher.
