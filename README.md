@@ -201,7 +201,6 @@ helm install rental-operator \
 ## Limitations
 
 - **A saved key becomes the account's default.** A rental created without naming keys gets the account's newest key, or under an organization, the organization's newest key. Saving a key with an SSHKey makes it that key, for teammates' rentals too. Name keys in `sshKeyRefs` rather than relying on the default.
-- **Rentals don't join your cluster as nodes.** You get machines you reach over SSH, not nodes in `kubectl get nodes`. Whether they should is open for discussion on the [roadmap](ROADMAP.md).
 - **The operator must be running to end a rental.** Deleting the cluster or uninstalling the operator leaves rentals billing. Delete GPURentals first.
 - **On-demand only.** Reserved-term rentals (prepaid commitments) are out of scope.
 - **Polling.** The API has no push notifications, so status is poll-driven (about 10s while provisioning, 60s once running). All GPURentals on one account share one list of rentals per interval, so a hundred rentals cost the same API budget as one.
