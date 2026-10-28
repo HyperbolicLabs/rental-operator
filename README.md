@@ -13,6 +13,7 @@
 [![Test](https://github.com/HyperbolicLabs/rental-operator/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/HyperbolicLabs/rental-operator/actions/workflows/test.yml)
 [![Release](https://img.shields.io/github/v/release/HyperbolicLabs/rental-operator?sort=semver)](https://github.com/HyperbolicLabs/rental-operator/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/rental-operator)](https://artifacthub.io/packages/helm/rental-operator/rental-operator)
 
 Rent [Hyperbolic](https://hyperbolic.ai) on-demand GPUs from your own Kubernetes cluster, declaratively.
 
