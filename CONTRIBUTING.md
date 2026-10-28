@@ -14,15 +14,6 @@ Thanks for your interest. Bug reports, fixes, docs and features are all welcome.
 
 You need Go (the version in `go.mod`), Docker, and for end-to-end tests [kind](https://kind.sigs.k8s.io/) and [Helm](https://helm.sh). The Makefile downloads the other tools (controller-gen, kustomize, golangci-lint, envtest) into `./bin`.
 
-The operator talks to Hyperbolic through [`hyperbolic-go`](https://github.com/HyperbolicLabs/hyperbolic-go), which is private for now. Until it is public you need read access to it, and:
-
-```console
-export GOPRIVATE=github.com/HyperbolicLabs/*
-export HYPERBOLIC_GO_TOKEN=<a read-only GitHub token>   # only for make docker-build
-```
-
-CI reads the same token from the `HYPERBOLIC_GO_READ_TOKEN` Actions secret.
-
 ```console
 make build              # regenerate code and manifests, then build bin/manager
 make test               # unit and envtest suites

@@ -3,10 +3,7 @@ IMG ?= controller:latest
 # VERSION is stamped into the manager binary and the User-Agent of its API requests.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS ?= -X github.com/HyperbolicLabs/rental-operator/internal/version.Version=$(VERSION)
-# HYPERBOLIC_GO_TOKEN, when set, is passed to image builds as the "gh_token"
-# secret so they can fetch the private github.com/HyperbolicLabs/hyperbolic-go module.
-comma := ,
-DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION) $(if $(HYPERBOLIC_GO_TOKEN),--secret id=gh_token$(comma)env=HYPERBOLIC_GO_TOKEN)
+DOCKER_BUILD_ARGS ?= --build-arg VERSION=$(VERSION)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
