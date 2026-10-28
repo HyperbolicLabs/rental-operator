@@ -10,7 +10,7 @@ You need Kubernetes 1.35 to 1.37, Helm 3, and a Hyperbolic API key.
 
 ```console
 helm install rental-operator oci://ghcr.io/hyperboliclabs/charts/rental-operator \
-  --version X.Y.Z --namespace rental-operator-system --create-namespace
+  --namespace rental-operator-system --create-namespace
 ```
 
 Helm installs the CRDs on the first install only. [Install, upgrade and uninstall](https://github.com/HyperbolicLabs/rental-operator/blob/main/docs/install.md) covers upgrading them, verifying a release's signatures, and the namespaced install.
