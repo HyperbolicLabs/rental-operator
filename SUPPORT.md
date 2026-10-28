@@ -14,7 +14,7 @@ Before 1.0, only the latest minor release is supported. Fixes, including securit
 
 | Release | Released | Status | Supported until |
 |---|---|---|---|
-| 0.1 | Not yet | Upcoming | The release of 0.2 |
+| 0.1 | 2026-10-28 | Supported | The release of 0.2 |
 
 ## Compatibility
 
@@ -22,7 +22,7 @@ Each release supports the three newest Kubernetes minor versions at the time it 
 
 | rental-operator | Kubernetes | Tested on | Helm | hyperbolic-go |
 |---|---|---|---|---|
-| 0.1 | 1.35, 1.36, 1.37 | v1.35.8, v1.36.4, v1.37.0 (kind v0.33.0) | 3.x (CI uses 3.15) | 0.1 |
+| 0.1 | 1.35, 1.36, 1.37 | v1.35.8, v1.36.4, v1.37.0 (kind v0.33.0) | 3.x (CI uses 3.22) | 0.1 |
 
 Other versions may work, but they are not tested, and problems that only happen on them are fixed on a best-effort basis.
 

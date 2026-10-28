@@ -83,7 +83,7 @@ You need Kubernetes 1.35 to 1.37, [Helm](https://helm.sh) 3, a Hyperbolic API ke
 
 ```console
 helm install rental-operator \
-  oci://ghcr.io/hyperboliclabs/charts/rental-operator --version X.Y.Z \
+  oci://ghcr.io/hyperboliclabs/charts/rental-operator \
   --namespace rental-operator-system --create-namespace
 ```
 
