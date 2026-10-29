@@ -166,7 +166,3 @@ type ClusterProviderConfigList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []ClusterProviderConfig `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&ProviderConfig{}, &ProviderConfigList{}, &ClusterProviderConfig{}, &ClusterProviderConfigList{})
-}

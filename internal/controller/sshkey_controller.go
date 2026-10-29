@@ -42,7 +42,7 @@ import (
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -75,6 +75,13 @@ const (
 	eventKeyOrphaned          = "Orphaned"
 )
 
+// Event actions, what the operator was doing when it emitted the event.
+const (
+	actionSaveKey   = "Save"
+	actionDeleteKey = "Delete"
+	actionOrphanKey = "Orphan"
+)
+
 // SSHKeyReconciler saves an SSHKey's public key on its account, and deletes
 // the key again when the SSHKey is deleted, if the operator saved it.
 //
@@ -91,7 +98,7 @@ type SSHKeyReconciler struct {
 	// Clock tells the time.
 	Clock clock.PassiveClock
 	// Recorder emits events on SSHKeys.
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 	// APIReader reads around the cache, to explain a Secret the cache does
 	// not hold because it is not labeled. Optional.
 	APIReader client.Reader
@@ -113,7 +120,7 @@ func (r *SSHKeyReconciler) validate() error {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=providerconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile saves the key, or adopts the account's copy, and reports it on
 // status.
@@ -195,8 +202,8 @@ func (r *SSHKeyReconciler) save(ctx context.Context, key *hypv1alpha1.SSHKey, hc
 	log := logf.FromContext(ctx)
 	if id, ok := key.Annotations[hypv1alpha1.AnnotationSSHKeyID]; ok {
 		log.Info("the saved key is no longer on the account; saving it again", "id", id)
-		r.Recorder.Event(key, corev1.EventTypeWarning, eventKeyDeletedExternally,
-			fmt.Sprintf("SSH key %s was deleted outside the operator, so it is saved again", id))
+		r.Recorder.Eventf(key, nil, corev1.EventTypeWarning, eventKeyDeletedExternally, actionSaveKey,
+			"SSH key %s was deleted outside the operator, so it is saved again", id)
 		if err := patchAnnotations(ctx, r.Client, key, nil, hypv1alpha1.AnnotationSSHKeyID); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -253,7 +260,7 @@ func (r *SSHKeyReconciler) save(ctx context.Context, key *hypv1alpha1.SSHKey, hc
 	key.Status.ID = int64(saved.ID)
 	r.setReady(key, metav1.ConditionTrue, hypv1alpha1.ReasonSaved, fmt.Sprintf(
 		"Saved on the account as SSH key %d. Deleting this SSHKey deletes it, unless deletionPolicy is Orphan.", saved.ID))
-	r.Recorder.Event(key, corev1.EventTypeNormal, eventKeySaved, fmt.Sprintf("Saved the key on the account as SSH key %d", saved.ID))
+	r.Recorder.Eventf(key, nil, corev1.EventTypeNormal, eventKeySaved, actionSaveKey, "Saved the key on the account as SSH key %d", saved.ID)
 	log.Info("saved SSH key", "id", saved.ID)
 	return r.finish(ctx, key, sshKeyRecheck)
 }
@@ -284,8 +291,8 @@ func (r *SSHKeyReconciler) reconcileDelete(ctx context.Context, key *hypv1alpha1
 	}
 	if key.Spec.DeletionPolicy == hypv1alpha1.DeletionPolicyOrphan {
 		if owned {
-			r.Recorder.Event(key, corev1.EventTypeNormal, eventKeyOrphaned, fmt.Sprintf(
-				"SSH key %d was left on the account (deletionPolicy: Orphan); delete it in the Hyperbolic dashboard when you are done with it", id))
+			r.Recorder.Eventf(key, nil, corev1.EventTypeNormal, eventKeyOrphaned, actionOrphanKey,
+				"SSH key %d was left on the account (deletionPolicy: Orphan); delete it in the Hyperbolic dashboard when you are done with it", id)
 		}
 		return r.removeFinalizer(ctx, key)
 	}
@@ -300,7 +307,7 @@ func (r *SSHKeyReconciler) reconcileDelete(ctx context.Context, key *hypv1alpha1
 			"Restore the ProviderConfig and its Secret, or set spec.deletionPolicy: Orphan "+
 			"and delete the key in the Hyperbolic dashboard.", credErr)
 		log.Info("deletion is waiting for credentials", "error", credErr.Error())
-		r.Recorder.Event(key, corev1.EventTypeWarning, eventKeyDeleteBlocked, msg)
+		r.Recorder.Eventf(key, nil, corev1.EventTypeWarning, eventKeyDeleteBlocked, actionDeleteKey, "%s", msg)
 		r.setSynced(key, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, msg)
 		return r.finish(ctx, key, apiRetry)
 	}
@@ -333,7 +340,7 @@ func (r *SSHKeyReconciler) reconcileDelete(ctx context.Context, key *hypv1alpha1
 		r.setSynced(key, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "delete SSH key: "+err.Error())
 		return r.finish(ctx, key, apiRetry)
 	}
-	r.Recorder.Event(key, corev1.EventTypeNormal, eventKeyDeleted, fmt.Sprintf("Deleted SSH key %d from the account", id))
+	r.Recorder.Eventf(key, nil, corev1.EventTypeNormal, eventKeyDeleted, actionDeleteKey, "Deleted SSH key %d from the account", id)
 	return r.removeFinalizer(ctx, key)
 }
 

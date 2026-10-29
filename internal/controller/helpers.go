@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -119,7 +119,7 @@ func apiDependencies(c client.Client, scheme *runtime.Scheme, newClient account.
 // things on the account needs besides apiDependencies: the remembered
 // credentials that let it delete after a Secret is gone, a clock for
 // create-pending, and a recorder for events.
-func createDeleteDependencies(credentials *account.CredentialsMemory, clk clock.PassiveClock, recorder record.EventRecorder) []dependency {
+func createDeleteDependencies(credentials *account.CredentialsMemory, clk clock.PassiveClock, recorder events.EventRecorder) []dependency {
 	return []dependency{
 		{"Credentials", credentials == nil},
 		{"Clock", clk == nil},

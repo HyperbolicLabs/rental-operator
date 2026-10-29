@@ -322,7 +322,3 @@ type GPURentalList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []GPURental `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&GPURental{}, &GPURentalList{})
-}

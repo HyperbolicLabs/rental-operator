@@ -39,6 +39,12 @@ const (
 	eventOrphaned           = "Orphaned"
 )
 
+// Event actions, what the operator was doing when it emitted the event.
+const (
+	actionTerminate = "Terminate"
+	actionOrphan    = "Orphan"
+)
+
 // reconcileDelete terminates the rental and removes the finalizer only once
 // the rental is confirmed gone, or when deletionPolicy is Orphan, or when no
 // rental was ever created. It never gives up silently: a stuck finalizer is
@@ -52,8 +58,8 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 	if gr.Spec.DeletionPolicy == hypv1alpha1.DeletionPolicyOrphan {
 		if id := r.rentalID(gr); id != "" && gr.Status.TerminatedAt == nil {
 			log.Info("deleting without terminating the rental (deletionPolicy Orphan)", "rentalId", id)
-			r.Recorder.Event(gr, corev1.EventTypeNormal, eventOrphaned,
-				fmt.Sprintf("Rental %s was left running (deletionPolicy: Orphan); terminate it in the Hyperbolic dashboard when you are done with it", id))
+			r.Recorder.Eventf(gr, nil, corev1.EventTypeNormal, eventOrphaned, actionOrphan,
+				"Rental %s was left running (deletionPolicy: Orphan); terminate it in the Hyperbolic dashboard when you are done with it", id)
 		}
 		return r.removeFinalizer(ctx, gr)
 	}
@@ -70,7 +76,7 @@ func (r *GPURentalReconciler) reconcileDelete(ctx context.Context, gr *hypv1alph
 			"Restore the ProviderConfig and its Secret, or set spec.deletionPolicy: Orphan "+
 			"and terminate the rental in the Hyperbolic dashboard.", credErr)
 		log.Info("deletion is waiting for credentials", "error", credErr.Error())
-		r.Recorder.Event(gr, corev1.EventTypeWarning, eventTerminationBlocked, msg)
+		r.Recorder.Eventf(gr, nil, corev1.EventTypeWarning, eventTerminationBlocked, actionTerminate, "%s", msg)
 		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonCredentialError, msg)
 		return r.finish(ctx, gr, apiRetry)
 	}
@@ -136,7 +142,7 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 		default:
 			msg := fmt.Sprintf("%d active rentals carry label %q and the operator cannot tell which one to terminate. "+
 				"Terminate them in the Hyperbolic dashboard, or set spec.deletionPolicy: Orphan.", len(matches), rentalLabel(gr))
-			r.Recorder.Event(gr, corev1.EventTypeWarning, eventTerminationBlocked, msg)
+			r.Recorder.Eventf(gr, nil, corev1.EventTypeWarning, eventTerminationBlocked, actionTerminate, "%s", msg)
 			r.setReady(gr, metav1.ConditionUnknown, hypv1alpha1.ReasonCreateOutcomeUnknown, msg)
 			res, err := r.finish(ctx, gr, blockedRetry)
 			return false, res, err
@@ -147,7 +153,7 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 	r.Rentals.Invalidate(key)
 	r.Metrics.RentalTerminated(err)
 	if err != nil {
-		r.Recorder.Event(gr, corev1.EventTypeWarning, eventTerminateFailed, fmt.Sprintf("Terminating rental %s failed, retrying: %v", id, err))
+		r.Recorder.Eventf(gr, nil, corev1.EventTypeWarning, eventTerminateFailed, actionTerminate, "Terminating rental %s failed, retrying: %v", id, err)
 		r.setSynced(gr, metav1.ConditionFalse, hypv1alpha1.ReasonAPIError, "terminate: "+err.Error())
 		res, err := r.finish(ctx, gr, apiRetry)
 		return false, res, err
@@ -165,7 +171,7 @@ func (r *GPURentalReconciler) terminate(ctx context.Context, gr *hypv1alpha1.GPU
 		res, err := r.finish(ctx, gr, pendingPoll)
 		return false, res, err
 	}
-	r.Recorder.Event(gr, corev1.EventTypeNormal, eventTerminated, fmt.Sprintf("Rental %s terminated (%s)", id, why))
+	r.Recorder.Eventf(gr, nil, corev1.EventTypeNormal, eventTerminated, actionTerminate, "Rental %s terminated (%s)", id, why)
 	return true, ctrl.Result{}, nil
 }
 
