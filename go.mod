@@ -4,7 +4,7 @@ go 1.26.10
 
 require (
 	github.com/HyperbolicLabs/hyperbolic-go v0.1.0
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	golang.org/x/sync v0.24.0
