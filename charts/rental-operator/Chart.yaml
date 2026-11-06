@@ -19,6 +19,7 @@ keywords:
   - h100
   - h200
   - b200
+  - rtx-6000-pro
   - machine-learning
 maintainers:
   - name: Hyperbolic
