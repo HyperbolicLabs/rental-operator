@@ -228,7 +228,7 @@ func main() {
 		Rentals:                  rentals,
 		Clock:                    clock.RealClock{},
 		Metrics:                  operatorMetrics,
-		Recorder:                 mgr.GetEventRecorderFor("gpurental-controller"),
+		Recorder:                 mgr.GetEventRecorder("gpurental-controller"),
 		APIReader:                mgr.GetAPIReader(),
 		ClusterResourceNamespace: clusterResourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
@@ -272,7 +272,7 @@ func main() {
 		NewClient:                newClient,
 		Credentials:              credentials,
 		Clock:                    clock.RealClock{},
-		Recorder:                 mgr.GetEventRecorderFor("sshkey-controller"),
+		Recorder:                 mgr.GetEventRecorder("sshkey-controller"),
 		APIReader:                mgr.GetAPIReader(),
 		ClusterResourceNamespace: clusterResourceNamespace,
 	}).SetupWithManager(mgr); err != nil {
