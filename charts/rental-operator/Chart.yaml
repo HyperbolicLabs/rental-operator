@@ -4,22 +4,39 @@ description: Official Kubernetes operator for Hyperbolic on-demand GPUs
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://github.com/HyperbolicLabs/rental-operator
+home: https://www.hyperbolic.ai/docs/rental-operator/overview
+icon: https://raw.githubusercontent.com/HyperbolicLabs/rental-operator/main/.github/assets/HYP-Mark.svg
 sources:
   - https://github.com/HyperbolicLabs/rental-operator
 keywords:
   - hyperbolic
   - gpu
+  - gpu-cloud
   - operator
+  - kubernetes
+  - crd
+  - nvidia
+  - h100
+  - h200
+  - b200
+  - machine-learning
 maintainers:
   - name: Hyperbolic
 # Artifact Hub reads these to list the chart. The release workflow adds
-# artifacthub.io/prerelease for -rc versions. The CRD examples are checked
+# artifacthub.io/prerelease for -rc versions and sets the image tag in
+# artifacthub.io/images to the release version. The CRD examples are checked
 # against the CRDs by internal/controller/samples_test.go.
 annotations:
   artifacthub.io/operator: "true"
+  artifacthub.io/operatorCapabilities: basic install
   artifacthub.io/license: Apache-2.0
   artifacthub.io/category: ai-machine-learning
+  artifacthub.io/images: |
+    - name: rental-operator
+      image: ghcr.io/hyperboliclabs/rental-operator:0.1.0
+      platforms:
+        - linux/amd64
+        - linux/arm64
   artifacthub.io/links: |
     - name: Documentation
       url: https://www.hyperbolic.ai/docs/rental-operator/overview
