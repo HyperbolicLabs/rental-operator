@@ -1,9 +1,10 @@
 rental-operator {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
 
 1. Create a Secret with your Hyperbolic API key (in the namespace where your
-   GPURentals will live):
+   GPURentals will live). read -rs waits for you to paste the key without
+   echoing it or keeping it in history:
 
-   read -rs HYPERBOLIC_API_KEY   # paste the key; it is not echoed or kept in history
+   read -rs HYPERBOLIC_API_KEY
    kubectl create secret generic hyperbolic-key \
      --namespace <your-namespace> \
      --from-literal=api-key="$HYPERBOLIC_API_KEY"
