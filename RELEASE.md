@@ -21,7 +21,8 @@ How the custom resources' API versions evolve is a separate policy, described in
 
 - The image `ghcr.io/hyperboliclabs/rental-operator:X.Y.Z` for `linux/amd64` and `linux/arm64`, signed with cosign, with an SPDX SBOM and SLSA build provenance attached.
 - The chart `oci://ghcr.io/hyperboliclabs/charts/rental-operator` version `X.Y.Z`, signed with cosign.
-- A GitHub Release whose notes list the pull requests merged since the previous release, breaking changes first, with the packaged chart attached.
+- A GitHub Release whose notes list the pull requests merged since the previous stable release, breaking changes first, with the packaged chart attached. A pre-release's notes start at the previous tag, which may be another pre-release.
+- A changelog on [Artifact Hub](https://artifacthub.io/packages/helm/rental-operator/rental-operator) with the features, fixes and breaking changes since the previous stable release.
 
 [Verify a release](docs/install.md#verify-a-release) shows how to check the signatures before installing.
 
@@ -33,7 +34,7 @@ Patch releases ship as fixes land. A security fix ships as soon as it is ready, 
 
 1. If the operator needs unreleased `hyperbolic-go` changes, release `hyperbolic-go` first and move the operator's `go.mod` to that version in a pull request.
 2. In a pull request, update the release row and the tested Kubernetes versions in [SUPPORT.md](SUPPORT.md).
-3. Run the **Release** workflow on `main` from Actions. Leave the version empty to release the suggested one, or enter a pre-release of it, such as `v0.2.0-rc.1`, or a larger version. `make release-version` previews the suggestion, and `make release-version RELEASE=v1.0.0` checks a version of your own.
+3. Run the **Release** workflow on `main` from Actions. Leave the version empty to release the suggested one, or enter a pre-release of it, such as `v0.2.0-rc.1`, or a larger version. `make release-version` previews the suggestion, and `make release-version RELEASE=v1.0.0` checks a version of your own. If the release fixes security advisories, tick `security_updates` so Artifact Hub marks it as a security update.
 4. An owner approves the run in the `release` environment.
 5. When it finishes, verify the signatures and install the published chart on a kind cluster, as [docs/development.md](docs/development.md#run-it-on-kind) describes, using the GHCR chart instead of the checkout.
 
@@ -45,7 +46,7 @@ Patch releases ship as fixes land. A security fix ships as soon as it is ready, 
 2. chooses the version, and refuses one that is already released or smaller than the suggestion
 3. waits for an owner's approval
 4. builds and pushes the multi-arch image, tagged `X.Y.Z`, and `latest` unless it is a pre-release, with BuildKit attaching the SBOM and provenance
-5. packages the chart with `version` and `appVersion` set to the release, so it pulls the matching image, and pushes it to GHCR
+5. packages the chart with `version` and `appVersion` set to the release, so it pulls the matching image, and pushes it to GHCR. The packaged chart's Artifact Hub annotations name the image it built and list the changes from `hack/chart-changes.sh`, and mark pre-releases and security updates
 6. signs the image and the chart with cosign, keyless, using the workflow's GitHub identity, and publishes the chart's Artifact Hub metadata
 7. creates the tag and the GitHub Release with generated notes and the packaged chart
 
