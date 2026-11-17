@@ -30,7 +30,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -105,7 +105,7 @@ func newRentalReconciler() *GPURentalReconciler {
 		Rentals:       account.NewRentalCache(alwaysLater{}),
 		Credentials:   account.NewCredentialsMemory(),
 		Clock:         clock.RealClock{},
-		Recorder:      &record.FakeRecorder{},
+		Recorder:      &events.FakeRecorder{},
 		Metrics:       testMetrics,
 		APIReader:     k8sClient,
 	}
@@ -142,7 +142,7 @@ func newSSHKeyReconciler() *SSHKeyReconciler {
 		NewClient:   testClientFactory,
 		Credentials: account.NewCredentialsMemory(),
 		Clock:       clock.RealClock{},
-		Recorder:    &record.FakeRecorder{},
+		Recorder:    &events.FakeRecorder{},
 		APIReader:   k8sClient,
 	}
 }
