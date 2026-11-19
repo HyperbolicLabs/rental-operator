@@ -28,7 +28,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	hypv1alpha1 "github.com/HyperbolicLabs/rental-operator/api/v1alpha1"
@@ -62,7 +62,7 @@ var _ = Describe("Deleting without leaking", func() {
 		reconcileOnce(ctx, r, key)
 		return key
 	}
-	events := func(rec *record.FakeRecorder) []string {
+	emitted := func(rec *events.FakeRecorder) []string {
 		var out []string
 		for {
 			select {
@@ -94,7 +94,7 @@ var _ = Describe("Deleting without leaking", func() {
 		deleteRental(key)
 
 		restarted := newRentalReconciler() // an operator restart forgets every key
-		rec := record.NewFakeRecorder(10)
+		rec := events.NewFakeRecorder(10)
 		restarted.Recorder = rec
 		reconcileOnce(ctx, restarted, key)
 
@@ -103,7 +103,7 @@ var _ = Describe("Deleting without leaking", func() {
 		Expect(gr.DeletionTimestamp).NotTo(BeNil())
 		Expect(gr.Finalizers).To(ContainElement(hypv1alpha1.FinalizerTerminate))
 		Expect(conditionOf(gr.Status.Conditions, hypv1alpha1.ConditionSynced).Reason).To(Equal(hypv1alpha1.ReasonCredentialError))
-		Expect(events(rec)).To(ContainElement(SatisfyAll(
+		Expect(emitted(rec)).To(ContainElement(SatisfyAll(
 			ContainSubstring(eventTerminationBlocked), ContainSubstring("deletionPolicy: Orphan"))))
 		Expect(acct.api.ActiveRentals()).To(HaveLen(1))
 
@@ -113,7 +113,7 @@ var _ = Describe("Deleting without leaking", func() {
 		reconcileOnce(ctx, restarted, key)
 		Expect(gone(key)).To(BeTrue())
 		Expect(acct.api.ActiveRentals()).To(HaveLen(1))
-		Expect(events(rec)).To(ContainElement(ContainSubstring(eventOrphaned)))
+		Expect(emitted(rec)).To(ContainElement(ContainSubstring(eventOrphaned)))
 	})
 
 	It("leaves the rental running with deletionPolicy Orphan", func() {

@@ -72,7 +72,7 @@ Five custom resources, all in the `hyperbolic` category (`kubectl get hyperbolic
 - **`ProviderConfig`** points at the labeled `Secret` holding your API key, validates it, and reports your account's balance, active rentals and hourly cost as Hyperbolic reports them.
 - **`ClusterProviderConfig`** does the same for a key a platform team shares across namespaces. Its Secret stays in the operator's namespace.
 - **`GPURental`** is one on-demand rental. The operator creates it, polls it to Running, publishes SSH details on status, and on delete terminates it and waits until Hyperbolic confirms it is gone.
-- **`GPUAvailability`** is a filtered, always-fresh view of what your account can rent.
+- **`GPUAvailability`** is a filtered view of what your account can rent, refreshed regularly.
 - **`SSHKey`** saves an SSH public key on your account, so GPURentals can authorize it by name, and deletes it again with the object.
 
 [Architecture](docs/architecture.md) shows the GPURental lifecycle and how creates and deletes stay safe when the API times out, the operator restarts or a namespace is deleted.
@@ -90,14 +90,14 @@ helm install rental-operator \
 1. **Store your API key** (in whatever namespace your rentals will live in):
 
    ```console
-   read -rs HYPERBOLIC_API_KEY   # paste the key; it is not echoed or kept in shell history
+   read -rs HYPERBOLIC_API_KEY
    kubectl create secret generic hyperbolic-key \
      --from-literal=api-key="$HYPERBOLIC_API_KEY"
    kubectl label secret hyperbolic-key compute.hyperbolic.ai/credentials=true
    unset HYPERBOLIC_API_KEY
    ```
 
-   The operator only reads Secrets with that label, so it never holds the rest of your cluster's Secrets in memory.
+   `read -rs` waits for you to paste the key, without echoing it or saving it in your shell history. The operator only caches Secrets with that label, so it never holds the rest of your cluster's Secrets in memory.
 
    If you manage Secrets declaratively, for example with External Secrets or Sealed Secrets, put the label in the Secret's metadata:
 
@@ -169,7 +169,7 @@ helm install rental-operator \
 
    ```console
    $ kubectl get gpurental train-run-42 -o jsonpath='{.status.instances[*].ssh}'
-   root@144.202.10.31:22
+   root@203.0.113.10:22
    ```
 
 6. **Release the GPUs** by deleting the object:

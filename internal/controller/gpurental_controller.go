@@ -23,7 +23,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
@@ -70,7 +70,7 @@ type GPURentalReconciler struct {
 	// Clock tells the time.
 	Clock clock.PassiveClock
 	// Recorder emits events on GPURentals.
-	Recorder record.EventRecorder
+	Recorder events.EventRecorder
 	// Metrics records create and terminate outcomes. Optional: nil records
 	// nothing.
 	Metrics *metrics.Recorder
@@ -99,7 +99,7 @@ func (r *GPURentalReconciler) validate() error {
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=clusterproviderconfigs,verbs=get;list;watch
 // +kubebuilder:rbac:groups=compute.hyperbolic.ai,resources=sshkeys,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
-// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile drives one GPURental toward its desired state.
 func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
