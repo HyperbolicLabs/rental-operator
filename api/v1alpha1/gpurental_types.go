@@ -40,10 +40,9 @@ type GPURentalSpec struct {
 	ProviderConfigRef ProviderConfigReference `json:"providerConfigRef"`
 
 	// GPUType is the GPU model to rent, as the catalog names it (for example
-	// h100, h200, b200 or rtx-6000-pro). It is checked against the account's
-	// catalog when the rental is created, so new models work without an
-	// operator upgrade. An unknown type leaves the rental Blocked with reason
-	// AvailabilityUnavailable.
+	// h100). It is checked against the account's catalog when the rental is
+	// created, so new models work without an operator upgrade. An unknown
+	// type leaves the rental Blocked with reason AvailabilityUnavailable.
 	// +kubebuilder:validation:Pattern=`^[a-z0-9][a-z0-9-]*$`
 	// +kubebuilder:validation:MaxLength=63
 	GPUType string `json:"gpuType"`

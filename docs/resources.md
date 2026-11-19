@@ -51,7 +51,7 @@ spec:
 | Spec field | Type | Description |
 |---|---|---|
 | `providerConfigRef` | `{kind, name}` (required) | The account to rent with: a ProviderConfig in this namespace (`kind` defaults to `ProviderConfig`) or a `ClusterProviderConfig`. |
-| `gpuType` | string (required) | GPU model as the catalog names it, e.g. `h100`, `h200`, `b200`, `rtx-6000-pro`. Checked against your account's catalog at create time, so new models work without an operator upgrade. |
+| `gpuType` | string (required) | GPU model as the catalog names it, e.g. `h100`. Checked against your account's catalog at create time, so new models work without an operator upgrade. |
 | `gpuCount` | int (required) | GPUs to rent. `>8` yields a multi-node rental. |
 | `region` | string | Region to rent in. Omit to auto-pick the cheapest available. |
 | `networkType` | enum | `ethernet` or `infiniband`. Omit to let the operator pick an available fabric. |
