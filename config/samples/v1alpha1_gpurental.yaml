@@ -8,7 +8,7 @@ spec:
   providerConfigRef:
     name: default
 
-  gpuType: h100          # as the catalog names it: h100, h200, b200, rtx-6000-pro, ...
+  gpuType: h100          # as the catalog names it
   gpuCount: 8            # >8 yields a multi-node rental
 
   # Optional. Omit to let the operator auto-pick the cheapest available region.
