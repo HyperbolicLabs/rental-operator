@@ -16,12 +16,14 @@ keywords:
   - kubernetes
   - crd
   - nvidia
+  - machine-learning
+  # GPU types: `make chart-keywords` rewrites the lines up to the next comment.
   - h100
   - h200
   - b200
   - b300
   - rtx-6000-pro
-  - machine-learning
+  # End of GPU types.
 maintainers:
   - name: Hyperbolic
 # Artifact Hub reads these to list the chart. The release workflow adds
