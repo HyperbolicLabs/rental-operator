@@ -144,7 +144,3 @@ type GPUAvailabilityList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []GPUAvailability `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&GPUAvailability{}, &GPUAvailabilityList{})
-}
