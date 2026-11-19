@@ -156,6 +156,10 @@ crd-check: crdify ## Fail on CRD changes since BASE that would break existing ob
 		$(CRDIFY) --config hack/crdify.yaml file://$(LOCALBIN)/crd-base.yaml file://$$f || exit 1; \
 	done
 
+.PHONY: chart-keywords
+chart-keywords: ## Rewrite the GPU types among the chart's keywords from the published API spec.
+	@hack/chart-keywords.sh $(SPEC_URL)
+
 .PHONY: release-version
 release-version: ## Print the next release's version. Set RELEASE to check a version of your own.
 	@hack/release-version.sh $(RELEASE)

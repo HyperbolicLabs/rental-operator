@@ -1,0 +1,89 @@
+name: Chart keywords
+
+# Checks the published API spec for GPU types every day. When the list
+# changed, rewrites the GPU types among the chart's keywords and opens (or
+# updates) a pull request, so Artifact Hub searches for a new GPU type find
+# the chart from the next release.
+#
+# Pull requests opened with the workflow's own token do not start other
+# workflows, so this one lints the chart itself and reports it in the PR.
+# The repository must allow GitHub Actions to create pull requests
+# (Settings > Actions > General).
+
+on:
+  schedule:
+    - cron: "43 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: chart-keywords
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # renovate: datasource=github-releases depName=helm/helm
+          version: v3.22.1
+
+      - name: Rewrite the GPU types from the published spec
+        id: sync
+        run: |
+          make chart-keywords
+          if git diff --quiet -- charts/rental-operator/Chart.yaml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lint the chart
+        id: lint
+        if: steps.sync.outputs.changed == 'true'
+        run: |
+          set +e
+          make helm-lint > lint.log 2>&1
+          echo "lint=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update the pull request
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINT: ${{ steps.lint.outputs.lint }}
+        run: |
+          {
+            echo "The GPU types in the published spec at https://api.hyperbolic.ai/v2/openapi.json changed. This updates the chart's keywords to match, so Artifact Hub searches for a GPU type find the chart."
+            echo
+            echo '```diff'; git diff -U0 -- charts/rental-operator/Chart.yaml | grep '^[+-]  - '; echo '```'
+            echo
+            echo "The operator needs no other change: it checks \`gpuType\` against the account's catalog."
+            echo
+            if [ "$LINT" = 0 ]; then
+              echo "- Chart lint: passed"
+            else
+              echo "- Chart lint: **failed**"
+              echo
+              echo '```'; tail -n 40 lint.log; echo '```'
+            fi
+          } > body.md
+          rm -f lint.log
+
+          branch=bot/chart-keywords
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add charts/rental-operator/Chart.yaml
+          git commit -m "chore(chart): sync the GPU type keywords"
+          git push --force origin "$branch"
+          if gh pr view "$branch" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$branch" --body-file body.md
+          else
+            gh pr create --base main --head "$branch" --title "chore(chart): sync the GPU type keywords" --body-file body.md
+          fi
