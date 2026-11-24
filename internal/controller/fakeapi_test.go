@@ -236,7 +236,7 @@ func rentalOptions(vms []hyperbolic.VirtualMachineOption) []hyperbolic.RentalOpt
 func h100x1(label string) hyperbolic.CreateRentalParams {
 	return hyperbolic.CreateRentalParams{
 		RentalType: hyperbolic.RentalTypeVirtualMachine,
-		GPUType:    hyperbolic.Ptr(hyperbolic.GPUTypeH100),
+		GPUType:    hyperbolic.Ptr("h100"),
 		GPUCount:   1,
 		Region:     hyperbolic.Ptr("us-central-1"),
 		Label:      &label,

@@ -105,7 +105,7 @@ func (r *GPURentalReconciler) findByLabel(ctx context.Context, hc *hyperbolic.Cl
 	}
 	matches := make([]hyperbolic.RentalWithStatus, 0, len(rentals))
 	for _, vm := range rentals {
-		if string(vm.GPUType) != gr.Spec.GPUType || vm.GPUCount != int(gr.Spec.GPUCount) {
+		if vm.GPUType != gr.Spec.GPUType || vm.GPUCount != int(gr.Spec.GPUCount) {
 			continue
 		}
 		if gr.Spec.Region != "" && vm.Region != gr.Spec.Region {
@@ -278,7 +278,7 @@ func (r *GPURentalReconciler) preflightAndCreate(ctx context.Context, gr *hypv1a
 	req := hyperbolic.CreateRentalParams{
 		RentalType:  hyperbolic.RentalTypeVirtualMachine,
 		GPUCount:    int(gr.Spec.GPUCount),
-		GPUType:     hyperbolic.Ptr(hyperbolic.GPUType(gr.Spec.GPUType)),
+		GPUType:     hyperbolic.Ptr(gr.Spec.GPUType),
 		Region:      hyperbolic.Ptr(chosen.Region),
 		TermType:    hyperbolic.Ptr(hyperbolic.TermTypeOnDemand),
 		NetworkType: hyperbolic.Ptr(hyperbolic.CreateRentalParamsNetworkType(networkType)),
