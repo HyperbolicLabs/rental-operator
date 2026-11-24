@@ -264,7 +264,7 @@ ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -
 # renovate: datasource=go depName=github.com/golangci/golangci-lint/v2
 GOLANGCI_LINT_VERSION ?= v2.15.0
 # renovate: datasource=go depName=golang.org/x/vuln
-GOVULNCHECK_VERSION ?= v1.9.0
+GOVULNCHECK_VERSION ?= v1.10.0
 # renovate: datasource=go depName=sigs.k8s.io/crdify
 CRDIFY_VERSION ?= v0.6.0
 # renovate: datasource=go depName=github.com/elastic/crd-ref-docs
