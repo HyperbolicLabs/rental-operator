@@ -33,7 +33,7 @@ func selectOption(options []hyperbolic.RentalOption, spec hypv1alpha1.GPURentalS
 		if !o.Enabled {
 			continue
 		}
-		if string(o.GPUType) != spec.GPUType || o.GPUCount != int(spec.GPUCount) {
+		if o.GPUType != spec.GPUType || o.GPUCount != int(spec.GPUCount) {
 			continue
 		}
 		if spec.Region != "" && o.Region != spec.Region {

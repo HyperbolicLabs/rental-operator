@@ -169,7 +169,7 @@ func (r *GPUAvailabilityReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvailabilitySpec) []hypv1alpha1.Offering {
 	out := make([]hypv1alpha1.Offering, 0, len(options))
 	for _, o := range account.VirtualMachineOptions(options) {
-		if spec.GPUType != "" && string(o.GPUType) != spec.GPUType {
+		if spec.GPUType != "" && o.GPUType != spec.GPUType {
 			continue
 		}
 		if spec.GPUCount != nil && o.GPUCount != int(*spec.GPUCount) {
@@ -199,7 +199,7 @@ func filterOfferings(options []hyperbolic.RentalOption, spec hypv1alpha1.GPUAvai
 			variant = string(*o.EthernetVariant)
 		}
 		out = append(out, hypv1alpha1.Offering{
-			GPUType:          string(o.GPUType),
+			GPUType:          o.GPUType,
 			GPUCount:         int32(o.GPUCount),
 			Region:           o.Region,
 			NetworkType:      string(o.ConnectionType),

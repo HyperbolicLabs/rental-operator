@@ -28,7 +28,7 @@ func rent(t *testing.T, c *hyperbolic.Client, label string) string {
 	t.Helper()
 	r, err := c.Rentals.Create(context.Background(), hyperbolic.CreateRentalParams{
 		RentalType: hyperbolic.RentalTypeVirtualMachine,
-		GPUType:    hyperbolic.Ptr(hyperbolic.GPUTypeH100),
+		GPUType:    hyperbolic.Ptr("h100"),
 		GPUCount:   1,
 		Region:     hyperbolic.Ptr("us-central-1"),
 		Label:      &label,
