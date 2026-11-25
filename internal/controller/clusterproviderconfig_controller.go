@@ -83,7 +83,7 @@ func (r *ClusterProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) err
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.ClusterProviderConfig{}, builder.WithPredicates(configChanged)).
+		For(&hypv1alpha1.ClusterProviderConfig{}, builder.WithPredicates(specChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.configsForSecret)).
 		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOf(true)),
 			builder.WithPredicates(rentalUsageChanged)).

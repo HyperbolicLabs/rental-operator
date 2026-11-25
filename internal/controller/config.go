@@ -275,12 +275,13 @@ func configOf(cluster bool) handler.MapFunc {
 	}
 }
 
-// configChanged passes every config event except an update that leaves the
-// spec alone and does not start a deletion. The reconcile writes status after
-// every read of the account. Without this filter that write would trigger
-// another reconcile, and so another read, until two passes landed in the same
+// specChanged passes every event except an update that leaves the spec alone
+// and does not start a deletion. The reconcilers write status, annotations and
+// finalizers after calling the API. Without this filter those writes would
+// trigger another reconcile, and so another call, until two passes landed in
+// the same second. A create that keeps failing would be sent about once a
 // second.
-var configChanged = predicate.Funcs{
+var specChanged = predicate.Funcs{
 	UpdateFunc: func(e event.UpdateEvent) bool {
 		return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() ||
 			e.ObjectOld.GetDeletionTimestamp().IsZero() != e.ObjectNew.GetDeletionTimestamp().IsZero()

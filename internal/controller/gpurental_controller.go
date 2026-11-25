@@ -47,6 +47,9 @@ const (
 	// spec change, so a gentle 5-minute cadence avoids hammering the API.
 	blockedRetry = 5 * time.Minute
 	apiRetry     = 30 * time.Second
+	// finalizerRequeue continues a reconcile that just added its finalizer.
+	// specChanged drops the update event that write causes.
+	finalizerRequeue = time.Millisecond
 )
 
 // GPURentalReconciler reconciles a GPURental object.
@@ -131,7 +134,7 @@ func (r *GPURentalReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err := r.Update(ctx, &gr); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: finalizerRequeue}, nil
 	}
 
 	// Record: once the rental is terminated (by us or externally) the object is
@@ -227,7 +230,7 @@ func (r *GPURentalReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.GPURental{}).
+		For(&hypv1alpha1.GPURental{}, builder.WithPredicates(specChanged)).
 		Watches(&hypv1alpha1.SSHKey{}, handler.EnqueueRequestsFromMapFunc(r.rentalsForSSHKey),
 			builder.WithPredicates(sshKeyUsableChanged)).
 		Named("gpurental").

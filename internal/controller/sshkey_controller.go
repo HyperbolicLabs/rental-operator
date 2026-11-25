@@ -45,6 +45,7 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/clock"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -149,7 +150,7 @@ func (r *SSHKeyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		if err := r.Update(ctx, &key); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{RequeueAfter: finalizerRequeue}, nil
 	}
 
 	if credErr != nil {
@@ -400,7 +401,7 @@ func (r *SSHKeyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.SSHKey{}).
+		For(&hypv1alpha1.SSHKey{}, builder.WithPredicates(specChanged)).
 		Named("sshkey").
 		Complete(r)
 }
