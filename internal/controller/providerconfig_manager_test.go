@@ -39,25 +39,14 @@ var _ = Describe("ProviderConfig in a running manager", func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		DeferCleanup(cancel)
 		acct := newFakeAccount(ctx)
-
-		mgr, err := ctrl.NewManager(cfg, ctrl.Options{
-			Scheme:                 k8sClient.Scheme(),
-			Metrics:                metricsserver.Options{BindAddress: "0"},
-			HealthProbeBindAddress: "0",
-			Controller:             config.Controller{SkipNameValidation: ptr(true)},
-			Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{acct.namespace: {}}},
+		startManager(ctx, acct.namespace, func(mgr ctrl.Manager) error {
+			return (&ProviderConfigReconciler{
+				Client:    mgr.GetClient(),
+				Scheme:    mgr.GetScheme(),
+				NewClient: testClientFactory,
+				APIReader: mgr.GetAPIReader(),
+			}).SetupWithManager(mgr)
 		})
-		Expect(err).NotTo(HaveOccurred())
-		Expect((&ProviderConfigReconciler{
-			Client:    mgr.GetClient(),
-			Scheme:    mgr.GetScheme(),
-			NewClient: testClientFactory,
-			APIReader: mgr.GetAPIReader(),
-		}).SetupWithManager(mgr)).To(Succeed())
-		go func() {
-			defer GinkgoRecover()
-			Expect(mgr.Start(ctx)).To(Succeed())
-		}()
 
 		balanceReads := func() int { return acct.api.Requests(http.MethodGet, hyperbolictest.PathBalance) }
 		// Startup reconciles once per watched kind's first event. Let it settle.
@@ -83,3 +72,21 @@ var _ = Describe("ProviderConfig in a running manager", func() {
 		Consistently(balanceReads, 3*time.Second, 100*time.Millisecond).Should(Equal(settled + 1))
 	})
 })
+
+// startManager runs a manager that caches namespace, with the controllers
+// setup adds, until ctx is cancelled.
+func startManager(ctx context.Context, namespace string, setup func(ctrl.Manager) error) {
+	mgr, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme:                 k8sClient.Scheme(),
+		Metrics:                metricsserver.Options{BindAddress: "0"},
+		HealthProbeBindAddress: "0",
+		Controller:             config.Controller{SkipNameValidation: ptr(true)},
+		Cache:                  cache.Options{DefaultNamespaces: map[string]cache.Config{namespace: {}}},
+	})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(setup(mgr)).To(Succeed())
+	go func() {
+		defer GinkgoRecover()
+		Expect(mgr.Start(ctx)).To(Succeed())
+	}()
+}

@@ -70,7 +70,8 @@ var _ = It("lists every CRD in the chart's Artifact Hub annotations, with exampl
 	Expect(yaml.Unmarshal([]byte(chart.Annotations["artifacthub.io/crds"]), &crds)).To(Succeed())
 	bases, err := filepath.Glob(filepath.Join("..", "..", "config", "crd", "bases", "*.yaml"))
 	Expect(err).NotTo(HaveOccurred())
-	var want, listed []string
+	want := make([]string, 0, len(bases))
+	listed := make([]string, 0, len(crds))
 	for _, f := range bases {
 		// compute.hyperbolic.ai_gpurentals.yaml is gpurentals.compute.hyperbolic.ai.
 		group, plural, _ := strings.Cut(strings.TrimSuffix(filepath.Base(f), ".yaml"), "_")
