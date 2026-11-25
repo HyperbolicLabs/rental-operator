@@ -1,6 +1,6 @@
 module github.com/HyperbolicLabs/rental-operator
 
-go 1.26.11
+go 1.27.4
 
 require (
 	github.com/HyperbolicLabs/hyperbolic-go v0.2.0
