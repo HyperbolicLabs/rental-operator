@@ -88,7 +88,7 @@ func (r *ProviderConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&hypv1alpha1.ProviderConfig{}, builder.WithPredicates(configChanged)).
+		For(&hypv1alpha1.ProviderConfig{}, builder.WithPredicates(specChanged)).
 		Watches(&corev1.Secret{}, handler.EnqueueRequestsFromMapFunc(r.providerConfigsForSecret)).
 		Watches(&hypv1alpha1.GPURental{}, handler.EnqueueRequestsFromMapFunc(configOf(false)),
 			builder.WithPredicates(rentalUsageChanged)).
